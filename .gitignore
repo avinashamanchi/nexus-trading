@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.env
+*.egg-info/
+
+# Node
+ui/node_modules/
+ui/.vite/
+
+# Database & logs (don't commit live data)
+db/
+logs/
+shadow/
+
+# Secrets
+.env
+*.key
+
+# OS
+.DS_Store

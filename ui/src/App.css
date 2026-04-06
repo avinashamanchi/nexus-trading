@@ -1,0 +1,18 @@
+/* App-specific styles — global in index.css */
+
+@keyframes ks-pulse {
+  0%,100% { box-shadow: 0 0 24px rgba(255,69,58,.35) }
+  50% { box-shadow: 0 0 48px rgba(255,69,58,.7), 0 0 80px rgba(255,69,58,.2) }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Recharts tooltip overrides */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: rgba(15,15,24,0.95) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 10px !important;
+}

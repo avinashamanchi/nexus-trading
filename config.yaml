@@ -1,0 +1,121 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  Autonomous Cooperative-AI Trading System — Master Configuration
+#  All dollar values are in USD. All percentages are decimal (0.01 = 1%).
+#  Human Governance Layer must approve any change to risk/* or capital/* params.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+system:
+  mode: shadow                    # shadow | live
+  log_level: INFO
+  heartbeat_interval_ms: 500
+  session_timezone: America/New_York
+
+# ─── Capital & Account Structure (§7.6) ────────────────────────────────────────
+capital:
+  starting_equity: 30000.00
+  pdt_minimum: 25000.00           # halt if equity falls below this
+  reserve_pct: 0.10               # 10% always held undeployed
+  per_trade_risk_pct: 0.005       # 0.5% of equity per trade (max 1%)
+  daily_max_loss_pct: 0.02        # 2% daily hard stop
+  daily_soft_profit: 1000.00      # soft stop — tracked, not hard-triggered
+  scale_up_threshold_pct: 0.20    # equity +20% triggers governance review
+  scale_down_trigger_pct: 0.10    # equity -10% from peak → 25% position de-scale
+  scale_down_reduction_pct: 0.25  # de-scale factor
+
+# ─── Risk Controls (§5.1, §7.5) ────────────────────────────────────────────────
+risk:
+  drawdown_velocity_loss: 300.00  # $ loss threshold for velocity check
+  drawdown_velocity_window_sec: 180  # 60→180 seconds for the window
+  consecutive_loss_cooldown_trades: 3  # trades before mandatory pause
+  consecutive_loss_cooldown_sec: 300
+  circuit_breaker_stopouts: 3     # stopouts in window → system pause
+  circuit_breaker_window_sec: 60
+  circuit_breaker_pause_sec: 600  # 5–10 minute pause
+  no_reentry_after_stop_sec: 180  # 3 minutes no-re-entry on symbol
+  max_concurrent_trades: 5
+  max_symbol_concentration_pct: 0.30  # max 30% of deployed capital in one symbol
+  max_sector_concentration: 3    # max 3 symbols from same sector
+  max_theme_concentration: 3
+
+# ─── Market Universe (Agent 1) ─────────────────────────────────────────────────
+universe:
+  min_active_symbols: 5
+  max_active_symbols: 12
+  min_avg_volume: 500000          # shares/day
+  max_spread_bps: 20              # bid-ask spread in basis points
+  min_price: 5.00
+  max_price: 500.00
+  min_float_million: 5            # million shares
+  starvation_check_consecutive_sessions: 3
+
+# ─── Market Regime (Agent 2) ───────────────────────────────────────────────────
+regime:
+  vix_high_threshold: 30.0
+  vix_extreme_threshold: 40.0
+  re_evaluation_interval_sec: 300  # 5-minute regime re-check
+
+# ─── Data Integrity (Agent 3) ──────────────────────────────────────────────────
+data_integrity:
+  max_tick_staleness_sec: 5
+  max_feed_divergence_pct: 0.005  # 0.5% price divergence between feeds
+  l2_snapshot_max_age_sec: 10
+
+# ─── Signal / Edge (Agents 4 & 5) ─────────────────────────────────────────────
+signals:
+  min_expectancy_score: 0.0       # net positive required
+  min_historical_samples: 1000
+  out_of_sample_min_trades: 200   # for parameter tweaks
+  rolling_expectancy_window: 50   # trades
+  retire_below_expectancy: -0.05  # retire if rolling EV < -5 cents/share
+
+# ─── Execution (Agents 8 & 10) ────────────────────────────────────────────────
+execution:
+  max_price_chase_bps: 10         # won't chase more than 10 bps from signal price
+  order_timeout_sec: 30           # cancel stale limit orders after this
+  max_fill_latency_p95_ms: 150    # at 5-symbol load
+  max_fill_latency_p95_ms_peak: 250  # at 12-symbol load
+  max_fill_latency_p99_ms_peak: 400
+  slippage_widen_threshold_bps: 5  # widen entry tolerance if slippage exceeds this
+
+# ─── Position Monitoring (Agent 11) ───────────────────────────────────────────
+monitoring:
+  max_hold_time_sec: 300          # 5-minute time stop — hard
+  atr_expansion_factor: 1.5      # exit if ATR > 150% of 10-bar avg
+  spread_doubling_exit: true      # exit if spread doubles
+  adverse_excursion_check_sec: 10
+
+# ─── Execution Quality (Agent 10) ─────────────────────────────────────────────
+execution_quality:
+  slippage_pause_threshold_bps: 15  # pause if avg slippage > 15 bps
+  rejection_rate_pause_threshold: 0.15  # pause if >15% orders rejected
+
+# ─── Shadow Mode Pass Criteria (§8.2) — HGL MUST sign off before run ──────────
+shadow:
+  min_trading_days: 15
+  min_completed_trades: 200
+  min_sharpe_annualized: 1.0
+  max_drawdown_pct: 0.04
+  min_win_rate: 0.50
+  min_setup_win_rate: 0.45
+  min_days_positive_expectancy_pct: 0.80
+  require_trend_day: true
+  require_mean_reversion_day: true
+  require_event_driven_day: true
+
+# ─── LLM Agent Settings ───────────────────────────────────────────────────────
+llm:
+  model: claude-sonnet-4-6
+  max_tokens: 4096
+  temperature: 0.1               # low temperature for deterministic risk decisions
+  timeout_sec: 30
+
+# ─── Message Bus ──────────────────────────────────────────────────────────────
+message_bus:
+  backend: redis                  # redis | memory (fallback for dev)
+  max_len: 10000                  # max stream length per topic
+  consumer_group: trading_system
+
+# ─── Post-Session Review (Agent 14) ───────────────────────────────────────────
+post_session:
+  expectancy_review_min_samples: 30
+  setup_parameter_tweak_threshold: 0.10   # 10% change triggers HGL review

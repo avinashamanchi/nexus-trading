@@ -1,0 +1,41 @@
+# Python 3.9 compatibility — enables X | Y union syntax in Pydantic models
+eval_type_backport>=0.2.0
+
+# Core AI / LLM
+anthropic>=0.40.0
+
+# Broker & Market Data
+alpaca-py>=0.26.0
+
+# Async Infrastructure
+aiohttp>=3.10.0
+aiofiles>=23.2.0
+aiosqlite>=0.20.0
+websockets>=13.0.0
+
+# Message Bus
+redis>=5.1.0
+
+# Data Processing
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.13.0
+
+# Validation & Config
+pydantic>=2.7.0
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+
+# CLI Dashboard & Logging
+rich>=13.7.0
+structlog>=24.1.0
+
+# Testing
+pytest>=8.1.0
+pytest-asyncio>=0.23.0
+pytest-mock>=3.14.0
+
+# Utilities
+python-dateutil>=2.9.0
+pytz>=2024.1
+tenacity>=8.3.0

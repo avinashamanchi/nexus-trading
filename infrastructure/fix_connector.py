@@ -168,6 +168,7 @@ class FIXConnector:
         self._cancel_tasks()
         if self._writer:
             self._writer.close()
+            await self._writer.wait_closed()
         self._state = FIXSessionState.DISCONNECTED
         logger.info("[FIX] Session stopped")
 

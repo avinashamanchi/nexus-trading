@@ -329,7 +329,6 @@ class StatArbAgent:
         qty_x = max(1.0, round(qty_y * signal.hedge_ratio))
 
         # Leg Y
-        side_y = OrderSide if signal.direction == 1 else None
         y_side = "buy" if signal.direction == 1 else "sell"
         x_side = "sell" if signal.direction == 1 else "buy"
 

@@ -249,7 +249,7 @@ export default function App() {
         <div className="tab-bar" style={{ display:'flex' }}>
           {TABS.map(t => (
             <button key={t} className={`tab${tab===t?' active':''}`} onClick={()=>setTab(t)}>
-              {t.charAt(0).toUpperCase()+t.slice(1)}
+              {t.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join('-')}
             </button>
           ))}
         </div>

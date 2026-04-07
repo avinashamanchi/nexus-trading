@@ -322,7 +322,8 @@ class FuturesPosition:
 
         Positive = rolling into backwardation (profit), negative = contango (cost).
         """
-        return (near_price - far_price) * self.contracts * self.spec.contract_size / self.spec.tick_size * self.spec.tick_value / self.spec.contract_size
+        ticks = (near_price - far_price) / self.spec.tick_size
+        return ticks * self.spec.tick_value * self.contracts
 
 
 # ══════════════════════════════════════════════════════════════════════════════

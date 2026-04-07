@@ -191,8 +191,11 @@ async def benchmark_rtt(
             )
             rtt = elapsed_us(start)
             profile.record(rtt)
-            writer.close()
-            await writer.wait_closed()
+            try:
+                writer.close()
+                await writer.wait_closed()
+            except Exception:
+                pass
         except (asyncio.TimeoutError, OSError):
             pass  # Count as packet loss — exclude from stats
         await asyncio.sleep(0.01)   # 10ms between pings

@@ -21,3 +21,4 @@ shadow/
 
 # OS
 .DS_Store
+.claude/

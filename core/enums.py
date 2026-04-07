@@ -290,3 +290,158 @@ class Topic(str, Enum):
     REPLAY_REQUEST = "replay_request"    # SMRE trigger
     REPLAY_REPORT = "replay_report"      # SMRE diff report
     KILL_SWITCH = "kill_switch"          # emergency flatten command
+
+
+# ─── Institutional / Multi-Asset ──────────────────────────────────────────────
+
+class AssetClass(str, Enum):
+    EQUITY = "equity"
+    FX = "fx"
+    FUTURES = "futures"
+    OPTIONS = "options"
+    FIXED_INCOME = "fixed_income"
+    CRYPTO = "crypto"
+
+
+class OrderVenue(str, Enum):
+    NYSE = "nyse"
+    NASDAQ = "nasdaq"
+    BATS = "bats"
+    IEX = "iex"
+    DARK_POOL = "dark_pool"
+    FX_ECN = "fx_ecn"
+    CME = "cme"
+    CBOE = "cboe"
+    DIRECT_DMA = "direct_dma"
+
+
+class QuoteSide(str, Enum):
+    BID = "bid"
+    ASK = "ask"
+    BOTH = "both"
+
+
+class InventoryAction(str, Enum):
+    SKEW_BID = "skew_bid"       # widen ask, tighten bid (unload long)
+    SKEW_ASK = "skew_ask"       # widen bid, tighten ask (unload short)
+    NEUTRAL = "neutral"
+    PULL_QUOTES = "pull_quotes"  # inventory limit hit
+
+
+class StatArbSignal(str, Enum):
+    ENTER_LONG_SPREAD = "enter_long_spread"   # spread too wide, mean-revert
+    ENTER_SHORT_SPREAD = "enter_short_spread"
+    EXIT = "exit"
+    NO_SIGNAL = "no_signal"
+
+
+class AltDataSource(str, Enum):
+    SATELLITE = "satellite"
+    CREDIT_CARD = "credit_card"
+    SHIPPING_MANIFEST = "shipping_manifest"
+    NEWS_NLP = "news_nlp"
+    SOCIAL_SENTIMENT = "social_sentiment"
+    WEATHER = "weather"
+    JOB_POSTINGS = "job_postings"
+    APP_DOWNLOADS = "app_downloads"
+    PATENT_FILINGS = "patent_filings"
+    EARNINGS_WHISPER = "earnings_whisper"
+
+
+class AltDataSignal(str, Enum):
+    BULLISH = "bullish"
+    BEARISH = "bearish"
+    NEUTRAL = "neutral"
+    INSUFFICIENT_DATA = "insufficient_data"
+
+
+# ─── FIX Protocol ─────────────────────────────────────────────────────────────
+
+class FIXMsgType(str, Enum):
+    LOGON = "A"
+    LOGOUT = "5"
+    HEARTBEAT = "0"
+    NEW_ORDER_SINGLE = "D"
+    ORDER_CANCEL_REQUEST = "F"
+    ORDER_CANCEL_REPLACE = "G"
+    EXECUTION_REPORT = "8"
+    ORDER_CANCEL_REJECT = "9"
+    MARKET_DATA_REQUEST = "V"
+    MARKET_DATA_SNAPSHOT = "W"
+    MARKET_DATA_INCREMENTAL = "X"
+    QUOTE = "S"
+    QUOTE_REQUEST = "R"
+    MASS_QUOTE = "i"
+
+
+class FIXSessionState(str, Enum):
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    LOGON_SENT = "logon_sent"
+    ACTIVE = "active"
+    LOGOUT_PENDING = "logout_pending"
+
+
+class FIXOrdStatus(str, Enum):
+    NEW = "0"
+    PARTIALLY_FILLED = "1"
+    FILLED = "2"
+    CANCELLED = "4"
+    REJECTED = "8"
+    PENDING_NEW = "A"
+    EXPIRED = "C"
+
+
+# ─── Regulatory / CAT ─────────────────────────────────────────────────────────
+
+class CATEventType(str, Enum):
+    NEW_ORDER = "MENO"           # Manual Exchange New Order
+    ROUTE_ORDER = "MEOR"         # Route to Exchange
+    FILL = "MEEF"                # Exchange Fill
+    CANCEL = "MEOC"              # Order Cancel
+    CANCEL_REPLACE = "MEOCR"     # Cancel/Replace
+    QUOTE = "MEQT"               # Market Maker Quote
+    EXCEPTION = "MEXC"           # CAT exception report
+
+
+class SpoofingRisk(str, Enum):
+    NONE = "none"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"         # triggers alert + hold
+    CRITICAL = "critical"  # triggers immediate halt + regulatory report
+
+
+# ─── Prime Broker / Clearing ──────────────────────────────────────────────────
+
+class PrimeBroker(str, Enum):
+    GOLDMAN_SACHS = "goldman_sachs"
+    MORGAN_STANLEY = "morgan_stanley"
+    JP_MORGAN = "jp_morgan"
+    INTERACTIVE_BROKERS = "interactive_brokers"  # institutional tier
+    ALPACA = "alpaca"                             # current paper/dev
+
+
+class MarginType(str, Enum):
+    REG_T = "reg_t"          # standard US margin (50% initial, 25% maintenance)
+    PORTFOLIO_MARGIN = "portfolio_margin"  # risk-based, much lower for hedged books
+    CROSS_MARGIN = "cross_margin"  # cross-collateralized across positions
+    INTRADAY = "intraday"    # same-day flat requirement
+
+
+# ─── Co-location / Latency ────────────────────────────────────────────────────
+
+class DataCenter(str, Enum):
+    EQUINIX_NY4 = "ny4"         # New Jersey — primary US equities
+    EQUINIX_NY5 = "ny5"         # New Jersey — backup
+    CME_AURORA = "aurora"        # Chicago — derivatives
+    EQUINIX_LD4 = "ld4"         # London — European equities
+    EQUINIX_TY3 = "ty3"         # Tokyo — Asian equities
+    EQUINIX_HK1 = "hk1"         # Hong Kong
+
+
+class LatencyTier(str, Enum):
+    RETAIL = "retail"           # 50–200ms — current
+    INSTITUTIONAL = "institutional"  # 1–10ms — co-located
+    HFT = "hft"                 # 1–100µs — FPGA
+    ULTRA_HFT = "ultra_hft"     # sub-microsecond — custom ASICs

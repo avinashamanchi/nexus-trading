@@ -43,6 +43,10 @@ AGENT_IDS = {
     17: "global_clock",
     18: "shadow_replay",
     19: "system_health",
+    20: "market_making",
+    21: "stat_arb",
+    22: "alt_data",
+    23: "cat_compliance",
 }
 
 AGENT_NAMES = {v: k for k, v in AGENT_IDS.items()}

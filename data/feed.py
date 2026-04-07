@@ -15,12 +15,15 @@ import asyncio
 import logging
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import Callable, Awaitable
+from typing import TYPE_CHECKING, Callable, Awaitable
 
 from alpaca.data.live import StockDataStream
 from alpaca.data.models import Bar, Quote, Trade
 
 from core.models import BarData, MarketTick
+
+if TYPE_CHECKING:
+    from infrastructure.kernel_bypass import KernelBypassFeed
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,11 @@ class AlpacaDataFeed:
         feed.add_tick_handler(my_handler)
         await feed.subscribe(["AAPL", "TSLA"])
         await feed.run()
+
+    Kernel-bypass mode:
+        bypass_feed = KernelBypassFeed()
+        feed = AlpacaDataFeed(api_key, secret_key, bypass=bypass_feed)
+        await feed.run()   # delegates to KernelBypassAdapter instead of WebSocket
     """
 
     def __init__(
@@ -50,11 +58,13 @@ class AlpacaDataFeed:
         secret_key: str,
         paper: bool = True,
         tick_cache_size: int = 500,
+        bypass: "KernelBypassFeed | None" = None,
     ) -> None:
         self._api_key = api_key
         self._secret_key = secret_key
         self._paper = paper
         self._tick_cache_size = tick_cache_size
+        self._bypass = bypass
 
         self._stream: StockDataStream | None = None
         self._subscribed_symbols: set[str] = set()
@@ -98,7 +108,21 @@ class AlpacaDataFeed:
         return list(hist)[-n:]
 
     async def run(self) -> None:
-        """Start the WebSocket feed. Blocks until stopped."""
+        """Start the WebSocket feed. Blocks until stopped.
+
+        If a KernelBypassFeed was provided at construction, delegates to
+        KernelBypassAdapter instead of opening a WebSocket connection.
+        """
+        if self._bypass is not None:
+            from infrastructure.kernel_bypass import KernelBypassAdapter
+            adapter = KernelBypassAdapter(self._bypass, self._tick_handlers)
+            self._running = True
+            try:
+                await adapter.run()
+            finally:
+                self._running = False
+            return
+
         feed_type = "iex" if not self._paper else "iex"
         self._stream = StockDataStream(
             api_key=self._api_key,

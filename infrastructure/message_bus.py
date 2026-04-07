@@ -7,6 +7,8 @@ Architecture notes:
   - If Redis is unavailable, the in-memory fallback keeps the system alive
     but PSA must be notified immediately (bus failure is a safe-mode trigger).
   - All messages are persisted for post-session audit.
+  - HFT upgrade: pass shared_memory=True or disruptor=True to MessageBus.__init__
+    to use the low-latency backends. Safe defaults preserve existing behaviour.
 """
 from __future__ import annotations
 
@@ -197,6 +199,13 @@ class MessageBus:
     """
     Facade that wraps either Redis Streams or the in-memory fallback.
 
+    Backends (in priority order when redis_url is None):
+      disruptor=True     → DisruptorBus   (LMAX Disruptor, asyncio, hot-path)
+      shared_memory=True → SharedMemoryBus (shared memory ring, multi-process)
+      default            → InMemoryBus    (asyncio queue, single-process)
+
+    Type union: RedisStreamBus | InMemoryBus | SharedMemoryBus | DisruptorBus
+
     Usage:
         bus = MessageBus(redis_url="redis://localhost:6379/0")
         await bus.connect()
@@ -204,21 +213,48 @@ class MessageBus:
         # subscribe is wrapped per-agent by BaseAgent
     """
 
+    # Hot-path topics that benefit most from the Disruptor backend
+    _HOT_TOPICS = {
+        Topic.CANDIDATE_SIGNAL,
+        Topic.VALIDATED_SIGNAL,
+        Topic.RISK_DECISION,
+        Topic.ORDER_SUBMITTED,
+    }
+
     def __init__(
         self,
         redis_url: str | None = None,
         consumer_group: str = "trading_system",
         max_len: int = 10_000,
+        shared_memory: bool = False,
+        disruptor: bool = False,
     ) -> None:
         self._redis_url = redis_url
         self._consumer_group = consumer_group
         self._max_len = max_len
+        self._shared_memory = shared_memory
+        self._disruptor = disruptor
         self._backend: RedisStreamBus | InMemoryBus | None = None
         self._using_fallback = False
         self._handlers: dict[str, list[MessageHandler]] = defaultdict(list)
         self._tasks: list[asyncio.Task] = []
 
     async def connect(self) -> None:
+        # HFT backends: only used when no Redis URL is provided
+        if not self._redis_url:
+            if self._disruptor:
+                from infrastructure.disruptor import DisruptorBus
+                self._backend = DisruptorBus()
+                self._using_fallback = True
+                logger.info("MessageBus: using DisruptorBus backend (HFT mode)")
+                return
+            if self._shared_memory:
+                from infrastructure.shared_memory_bus import SharedMemoryBus
+                self._backend = SharedMemoryBus()
+                self._using_fallback = True
+                logger.info("MessageBus: using SharedMemoryBus backend")
+                return
+
         if self._redis_url:
             bus = RedisStreamBus(
                 self._redis_url, self._consumer_group, self._max_len
@@ -276,6 +312,19 @@ class MessageBus:
 
     async def start_consuming(self, consumer_name: str = "default") -> None:
         """Start all subscription loops as background asyncio tasks."""
+        # Import lazily to avoid hard dependency when not using HFT backends
+        try:
+            from infrastructure.disruptor import DisruptorBus
+            _DisruptorBus = DisruptorBus
+        except ImportError:
+            _DisruptorBus = None
+
+        try:
+            from infrastructure.shared_memory_bus import SharedMemoryBus
+            _SharedMemoryBus = SharedMemoryBus
+        except ImportError:
+            _SharedMemoryBus = None
+
         if isinstance(self._backend, RedisStreamBus):
             for topic_str, handlers in self._handlers.items():
                 topic = Topic(topic_str)
@@ -295,6 +344,20 @@ class MessageBus:
                         name=f"bus-consumer-{topic_str}",
                     )
                     self._tasks.append(task)
+        elif _DisruptorBus is not None and isinstance(self._backend, _DisruptorBus):
+            # Register all handlers directly with the DisruptorBus, then start
+            for topic_str, handlers in self._handlers.items():
+                topic = Topic(topic_str)
+                for handler in handlers:
+                    self._backend.subscribe(topic, handler)
+            await self._backend.start_consuming()
+        elif _SharedMemoryBus is not None and isinstance(self._backend, _SharedMemoryBus):
+            # Register all handlers directly with the SharedMemoryBus, then start
+            for topic_str, handlers in self._handlers.items():
+                topic = Topic(topic_str)
+                for handler in handlers:
+                    self._backend.subscribe(topic, handler)
+            await self._backend.start_consuming()
 
     async def _pump_in_memory(
         self,

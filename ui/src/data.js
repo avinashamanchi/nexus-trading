@@ -298,3 +298,84 @@ export function makeBacktestResults() {
     ],
   };
 }
+
+// ── HFT Layer Data ────────────────────────────────────────────────────────────
+
+export function makeHFTTransportStats(tick) {
+  const base = 420 + Math.sin(tick * 0.3) * 80;
+  const hist = Array.from({ length: 20 }, (_, i) => ({
+    t: i,
+    ns: Math.round(380 + Math.sin((tick + i) * 0.4) * 120 + Math.random() * 40),
+  }));
+  return {
+    ringBuffer: {
+      latency_ns: Math.round(base + Math.random() * 60),
+      throughput_mps: +(1.2 + Math.random() * 0.4).toFixed(2),
+      producer_seq: 4096 * 12 + tick * 7,
+      consumer_lag: Math.floor(Math.random() * 3),
+      hist,
+    },
+    sbe: {
+      throughput_mps: +(2.8 + Math.random() * 0.6).toFixed(2),
+      avg_msg_bytes: 60,
+      savings_pct: 73,
+      bar: Array.from({ length: 8 }, (_, i) => ({
+        label: `T-${7 - i}s`,
+        msgs: Math.round(2600 + Math.random() * 800),
+      })),
+    },
+    disruptor: {
+      cursor_seq: 65536 * 3 + tick * 13,
+      event_processors: 4,
+      min_consumer_seq: 65536 * 3 + tick * 13 - Math.floor(Math.random() * 2),
+      publish_latency_ns: Math.round(180 + Math.random() * 40),
+    },
+  };
+}
+
+export function makeHFTOrderBook(tick) {
+  const mid = 183.20 + Math.sin(tick * 0.07) * 0.15;
+  const levels = 8;
+  const bids = Array.from({ length: levels }, (_, i) => {
+    const price = +(mid - 0.01 * (i + 1)).toFixed(2);
+    const qty = Math.round(200 + Math.random() * 800 * (1 / (i + 1)));
+    const orders = Math.round(2 + Math.random() * 6);
+    return { price, bidQty: qty, askQty: 0, orderCount: orders, spoofRisk: i === 0 ? 'LOW' : 'NONE' };
+  });
+  const asks = Array.from({ length: levels }, (_, i) => {
+    const price = +(mid + 0.01 * (i + 1)).toFixed(2);
+    const qty = Math.round(200 + Math.random() * 800 * (1 / (i + 1)));
+    const orders = Math.round(2 + Math.random() * 6);
+    return { price, bidQty: 0, askQty: qty, orderCount: orders, spoofRisk: i === 2 ? 'MEDIUM' : 'NONE' };
+  });
+  const spoofVenues = [
+    { venue: 'IEX',       risk: 'NONE',   addCancelRatio: 0.12 },
+    { venue: 'NASDAQ',    risk: 'LOW',    addCancelRatio: 0.38 },
+    { venue: 'BATS',      risk: 'MEDIUM', addCancelRatio: 0.61 },
+    { venue: 'DARK_POOL', risk: 'NONE',   addCancelRatio: 0.08 },
+  ];
+  return { bids, asks, mid: +mid.toFixed(2), spoofVenues };
+}
+
+export function makeHFTRouting(tick) {
+  return [
+    { venue:'IEX',       markout: +(0.18 + Math.sin(tick*0.1)*0.05).toFixed(3),   ucb1: +(2.41 + Math.random()*0.2).toFixed(3), nSelections: 342 + tick,  fillRate: 0.94 },
+    { venue:'NASDAQ',    markout: +(0.09 + Math.cos(tick*0.08)*0.04).toFixed(3),  ucb1: +(2.18 + Math.random()*0.3).toFixed(3), nSelections: 218 + tick,  fillRate: 0.89 },
+    { venue:'BATS',      markout: +(-0.22 - Math.abs(Math.sin(tick*0.12))*0.1).toFixed(3), ucb1: +(1.74 + Math.random()*0.2).toFixed(3), nSelections: 87 + tick, fillRate: 0.71 },
+    { venue:'DARK_POOL', markout: +(0.31 + Math.sin(tick*0.05)*0.06).toFixed(3),  ucb1: +(2.67 + Math.random()*0.1).toFixed(3), nSelections: 156 + tick,  fillRate: 0.97 },
+    { venue:'NYSE',      markout: +(0.04 + Math.cos(tick*0.09)*0.03).toFixed(3),  ucb1: +(1.95 + Math.random()*0.25).toFixed(3), nSelections: 64 + tick,  fillRate: 0.82 },
+    { venue:'DIRECT',    markout: +(0.44 + Math.sin(tick*0.06)*0.04).toFixed(3),  ucb1: +(3.12 + Math.random()*0.1).toFixed(3), nSelections: 29 + tick,   fillRate: 0.99 },
+  ];
+}
+
+export function makeHFTConsensus(tick) {
+  const leaderIdx = 0;
+  return Array.from({ length: 3 }, (_, i) => ({
+    nodeId: i,
+    state: i === leaderIdx ? 'LEADER' : 'FOLLOWER',
+    term: 4 + Math.floor(tick / 120),
+    logLength: 1024 + tick * 2 + i * 3,
+    heartbeatAgeMs: i === leaderIdx ? 0 : Math.round(20 + Math.random() * 30),
+    commitIndex: 1020 + tick * 2,
+  }));
+}

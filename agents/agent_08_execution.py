@@ -69,6 +69,7 @@ class ExecutionAgent(BaseAgent):
         broker: BrokerBase,
         data_feed: Any,          # DataFeed — for re-fetching latest tick
         config: dict | None = None,
+        sor: "Any | None" = None,  # ToxicitySOR | None — optional toxicity-aware SOR
     ) -> None:
         super().__init__(
             agent_id="agent_08_execution",
@@ -80,6 +81,7 @@ class ExecutionAgent(BaseAgent):
         )
         self.broker = broker
         self.data_feed = data_feed
+        self._sor = sor
 
         # ── State ──────────────────────────────────────────────────────────────
         # Gate: remains False until at least one CLEAN reconciliation received.
@@ -288,6 +290,13 @@ class ExecutionAgent(BaseAgent):
             status=OrderStatus.PENDING,
             submitted_at=datetime.utcnow(),
         )
+
+        if self._sor is not None:
+            decision = self._sor.route(symbol, side.value, float(plan.shares), is_aggressive=True)
+            logger.info(
+                "[EA] SOR venue=%s toxicity=%.3f reason=%s",
+                decision.venue.value, decision.toxicity_score, decision.reason,
+            )
 
         try:
             broker_order = await self.broker.submit_bracket_order(

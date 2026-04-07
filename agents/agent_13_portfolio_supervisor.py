@@ -44,9 +44,11 @@ class PortfolioSupervisorAgent(BaseAgent):
     def __init__(
         self,
         account_equity_fn: Callable[[], Awaitable[float]],
+        raft_psa: "Any | None" = None,  # RaftPSA | None — optional Raft consensus wrapper
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
+        self._raft_psa = raft_psa
         self._account_equity_fn = account_equity_fn
 
         # P/L tracking

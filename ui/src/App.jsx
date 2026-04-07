@@ -6,7 +6,8 @@ import {
 import {
   AGENTS, makeLivePnl, makePipeline, makePositions, makeAuditLog, makeHealth,
   makeMMPositions, makeStatArbPositions, makeAltDataSignals, makeCATSummary, makeBacktestResults,
-  makeFXPositions, makeFuturesPositions, makeOptionsPositions, makeSandboxStrategies
+  makeFXPositions, makeFuturesPositions, makeOptionsPositions, makeSandboxStrategies,
+  makeHFTTransportStats, makeHFTOrderBook, makeHFTRouting, makeHFTConsensus
 } from './data'
 import './App.css'
 
@@ -190,7 +191,7 @@ function PipelineFlow({ steps }) {
 }
 
 // ── Main App ────────────────────────────────────────────────────────────────
-const TABS = ['dashboard','agents','positions','institutional','multi-asset','audit','health']
+const TABS = ['dashboard','agents','positions','institutional','multi-asset','audit','health','hft']
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
@@ -282,6 +283,7 @@ export default function App() {
         {tab === 'multi-asset'   && <MultiAssetTab />}
         {tab === 'audit'         && <AuditTab audit={audit} />}
         {tab === 'health'        && <HealthTab health={health} tick={tick} />}
+        {tab === 'hft'           && <HFTTab tick={tick} />}
       </div>
 
       {ksOpen && <KillSwitchModal onClose={() => setKsOpen(false)} />}
@@ -1145,6 +1147,298 @@ function HealthTab({ health, tick }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── HFT Tab ───────────────────────────────────────────────────────────────────
+function HFTTab({ tick }) {
+  const [subTab, setSubTab] = useState('transport')
+  const transport = makeHFTTransportStats(tick)
+  const orderBook = makeHFTOrderBook(tick)
+  const routing = makeHFTRouting(tick)
+  const consensus = makeHFTConsensus(tick)
+
+  const spoofColor = r => r === 'CRITICAL' ? 'var(--red)' : r === 'HIGH' ? '#ff6b35' : r === 'MEDIUM' ? 'var(--yellow)' : r === 'LOW' ? '#64D2FF' : 'var(--t3)'
+  const spoofBadge = r => r === 'CRITICAL' ? 'red' : r === 'HIGH' ? 'red' : r === 'MEDIUM' ? 'yellow' : r === 'LOW' ? 'blue' : null
+
+  return (
+    <div style={{ flex:1, overflow:'auto', padding:20, display:'flex', flexDirection:'column', gap:16 }}>
+      <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
+        <h2 style={{ fontSize:20, fontWeight:700 }}>HFT Infrastructure</h2>
+        <div className="tab-bar">
+          {[['transport','Transport'],['orderbook','Order Book'],['routing','Routing'],['consensus','Consensus']].map(([k,v]) => (
+            <button key={k} className={`tab${subTab===k?' active':''}`} onClick={()=>setSubTab(k)}>{v}</button>
+          ))}
+        </div>
+      </div>
+
+      {subTab === 'transport' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+            {[
+              { label:'Ring Buffer Latency', value:`${transport.ringBuffer.latency_ns} ns`, color:'var(--blue)' },
+              { label:'SBE Throughput', value:`${transport.sbe.throughput_mps}M msg/s`, color:'var(--green)' },
+              { label:'Disruptor Cursor', value:transport.disruptor.cursor_seq.toLocaleString(), color:'var(--purple)' },
+              { label:'SBE Size Savings', value:`${transport.sbe.savings_pct}% vs JSON`, color:'var(--yellow)' },
+            ].map((m,i) => (
+              <div key={i} className="glass" style={{ padding:16 }}>
+                <div style={{ fontSize:11, color:'var(--t2)', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>{m.label}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:m.color }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="glass" style={{ padding:16 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+              Ring Buffer Round-Trip Latency (ns) — last 20s
+            </div>
+            <div style={{ height:120 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={transport.ringBuffer.hist}>
+                  <defs>
+                    <linearGradient id="nsGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0A84FF" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#0A84FF" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="t" hide />
+                  <YAxis domain={['auto','auto']} tick={{ fill:'var(--t3)', fontSize:10 }} width={40} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.8)', border:'1px solid var(--border)', borderRadius:8, fontSize:11 }}
+                    formatter={v=>[`${v} ns`,'Latency']} />
+                  <Area type="monotone" dataKey="ns" stroke="#0A84FF" fill="url(#nsGrad)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="glass" style={{ padding:16 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+              SBE Message Throughput — messages per second
+            </div>
+            <div style={{ height:140 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={transport.sbe.bar}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="label" tick={{ fill:'var(--t3)', fontSize:10 }} />
+                  <YAxis tick={{ fill:'var(--t3)', fontSize:10 }} width={50} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.8)', border:'1px solid var(--border)', borderRadius:8, fontSize:11 }}
+                    formatter={v=>[v.toLocaleString(),'Msgs']} />
+                  <Bar dataKey="msgs" fill="#32D74B" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="glass" style={{ padding:16 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>LMAX Disruptor</div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+              {[
+                { label:'Cursor Sequence', value:transport.disruptor.cursor_seq.toLocaleString() },
+                { label:'Event Processors', value:transport.disruptor.event_processors },
+                { label:'Min Consumer Seq', value:transport.disruptor.min_consumer_seq.toLocaleString() },
+                { label:'Publish Latency', value:`${transport.disruptor.publish_latency_ns} ns` },
+              ].map((m,i) => (
+                <div key={i} style={{ padding:'12px 14px', background:'rgba(255,255,255,0.04)', borderRadius:12 }}>
+                  <div style={{ fontSize:10, color:'var(--t2)', marginBottom:4 }}>{m.label}</div>
+                  <div style={{ fontSize:16, fontWeight:700 }}>{m.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subTab === 'orderbook' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+            {[
+              { label:'Mid Price', value:`$${orderBook.mid}`, color:'var(--t1)' },
+              { label:'Bid Levels', value:orderBook.bids.length, color:'var(--green)' },
+              { label:'Ask Levels', value:orderBook.asks.length, color:'var(--red)' },
+            ].map((m,i) => (
+              <div key={i} className="glass" style={{ padding:16 }}>
+                <div style={{ fontSize:11, color:'var(--t2)', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>{m.label}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:m.color }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="glass" style={{ padding:16 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+              MBO L3 Depth — Bids (left) / Asks (right)
+            </div>
+            <div style={{ height:180 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={[...orderBook.bids.map(b=>({price:`$${b.price}`,bidQty:b.bidQty,askQty:0})),
+                                 ...orderBook.asks.map(a=>({price:`$${a.price}`,bidQty:0,askQty:a.askQty}))]}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="price" tick={{ fill:'var(--t3)', fontSize:9 }} />
+                  <YAxis tick={{ fill:'var(--t3)', fontSize:10 }} width={45} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.8)', border:'1px solid var(--border)', borderRadius:8, fontSize:11 }} />
+                  <Bar dataKey="bidQty" fill="#32D74B" name="Bid Qty" radius={[4,4,0,0]} />
+                  <Bar dataKey="askQty" fill="#FF453A" name="Ask Qty" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="glass" style={{ overflow:'hidden' }}>
+            <div style={{ padding:'12px 16px', fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em' }}>
+              Venue Spoofing Risk — Add/Cancel Ratio (rolling 60s)
+            </div>
+            <div className="divider" />
+            <div style={{ display:'grid', gridTemplateColumns:'120px 1fr 120px 100px', padding:'8px 16px',
+              fontSize:10, color:'var(--t3)', fontWeight:600, textTransform:'uppercase', letterSpacing:'.05em', gap:8 }}>
+              <span>Venue</span><span>Add/Cancel Ratio</span><span>Risk Level</span><span>Status</span>
+            </div>
+            <div className="divider" />
+            {orderBook.spoofVenues.map((v,i) => (
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'120px 1fr 120px 100px',
+                padding:'10px 16px', borderBottom:'1px solid var(--border)', alignItems:'center', gap:8, fontSize:12 }}>
+                <span style={{ fontWeight:700 }}>{v.venue}</span>
+                <div style={{ height:6, background:'rgba(255,255,255,0.06)', borderRadius:3, overflow:'hidden' }}>
+                  <div style={{ height:'100%', width:`${Math.min(100, v.addCancelRatio * 100)}%`,
+                    background: v.addCancelRatio > 0.6 ? 'var(--red)' : v.addCancelRatio > 0.3 ? 'var(--yellow)' : 'var(--green)',
+                    borderRadius:3 }} />
+                </div>
+                <span style={{ color: spoofColor(v.risk), fontWeight:600 }}>{v.risk}</span>
+                {spoofBadge(v.risk)
+                  ? <span className={`badge badge-${spoofBadge(v.risk)}`} style={{ fontSize:9 }}>ALERT</span>
+                  : <span style={{ fontSize:10, color:'var(--t3)' }}>NORMAL</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {subTab === 'routing' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+            {[
+              { label:'Active Venues', value:routing.length, color:'var(--blue)' },
+              { label:'Best UCB1 Venue', value: routing.reduce((a,b)=>a.ucb1>b.ucb1?a:b).venue, color:'var(--green)' },
+              { label:'Toxic Venues', value: routing.filter(v=>v.markout < -0.1).length, color:'var(--red)' },
+            ].map((m,i) => (
+              <div key={i} className="glass" style={{ padding:16 }}>
+                <div style={{ fontSize:11, color:'var(--t2)', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>{m.label}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:m.color }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="glass" style={{ overflow:'hidden' }}>
+            <div style={{ padding:'12px 16px', fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em' }}>
+              Venue Toxicity Tracker — UCB1 Multi-Armed Bandit
+            </div>
+            <div className="divider" />
+            <div style={{ display:'grid', gridTemplateColumns:'110px 100px 100px 100px 80px', padding:'8px 16px',
+              fontSize:10, color:'var(--t3)', fontWeight:600, textTransform:'uppercase', letterSpacing:'.05em', gap:8 }}>
+              <span>Venue</span><span>Markout Score</span><span>UCB1 Score</span><span>N Selections</span><span>Fill Rate</span>
+            </div>
+            <div className="divider" />
+            {routing.map((v,i) => {
+              const markoutOk = v.markout >= 0
+              const markoutWarn = v.markout >= -0.1
+              const markoutColor = markoutOk ? 'var(--green)' : markoutWarn ? 'var(--yellow)' : 'var(--red)'
+              return (
+                <div key={i} style={{ display:'grid', gridTemplateColumns:'110px 100px 100px 100px 80px',
+                  padding:'11px 16px', borderBottom:'1px solid var(--border)', alignItems:'center', gap:8, fontSize:12 }}>
+                  <span style={{ fontWeight:700 }}>{v.venue}</span>
+                  <span style={{ color:markoutColor, fontWeight:600, fontVariantNumeric:'tabular-nums' }}>
+                    {v.markout >= 0 ? '+' : ''}{v.markout}
+                  </span>
+                  <span style={{ color:'var(--purple)', fontVariantNumeric:'tabular-nums' }}>{v.ucb1}</span>
+                  <span style={{ color:'var(--t2)', fontVariantNumeric:'tabular-nums' }}>{v.nSelections.toLocaleString()}</span>
+                  <span style={{ color: v.fillRate >= 0.9 ? 'var(--green)' : v.fillRate >= 0.75 ? 'var(--yellow)' : 'var(--red)' }}>
+                    {(v.fillRate * 100).toFixed(0)}%
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="glass" style={{ padding:16 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+              UCB1 Score by Venue
+            </div>
+            <div style={{ height:150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={routing.map(v=>({ venue:v.venue, ucb1:parseFloat(v.ucb1) }))}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="venue" tick={{ fill:'var(--t3)', fontSize:10 }} />
+                  <YAxis tick={{ fill:'var(--t3)', fontSize:10 }} width={35} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.8)', border:'1px solid var(--border)', borderRadius:8, fontSize:11 }} />
+                  <Bar dataKey="ucb1" fill="#BF5AF2" name="UCB1" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subTab === 'consensus' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12 }}>
+            {[
+              { label:'Cluster Size', value:'3 Nodes', color:'var(--blue)' },
+              { label:'Current Term', value:consensus[0].term, color:'var(--purple)' },
+              { label:'Leader', value:`Node ${consensus.find(n=>n.state==='LEADER')?.nodeId ?? '—'}`, color:'var(--yellow)' },
+            ].map((m,i) => (
+              <div key={i} className="glass" style={{ padding:16 }}>
+                <div style={{ fontSize:11, color:'var(--t2)', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>{m.label}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:m.color }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
+            {consensus.map(node => {
+              const isLeader = node.state === 'LEADER'
+              const isCandidate = node.state === 'CANDIDATE'
+              const stateColor = isLeader ? '#FFD60A' : isCandidate ? '#FF9F0A' : 'var(--t3)'
+              const badgeClass = isLeader ? 'badge-yellow' : isCandidate ? 'badge-yellow' : 'badge-blue'
+              return (
+                <div key={node.nodeId} className="glass" style={{
+                  padding:20, border: isLeader ? '1.5px solid rgba(255,214,10,0.45)' : undefined,
+                  boxShadow: isLeader ? '0 0 24px rgba(255,214,10,0.12)' : undefined,
+                }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                    <div style={{ fontSize:15, fontWeight:700 }}>Node {node.nodeId}</div>
+                    <span className={`badge ${badgeClass}`} style={{ fontSize:10, fontWeight:700 }}>
+                      {isLeader ? 'L' : isCandidate ? 'C' : 'F'} {node.state}
+                    </span>
+                  </div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    {[
+                      { label:'Term', value:node.term, color:stateColor },
+                      { label:'Log Length', value:node.logLength.toLocaleString(), color:'var(--t1)' },
+                      { label:'Commit Index', value:node.commitIndex.toLocaleString(), color:'var(--t2)' },
+                      { label:'Heartbeat Age', value:node.heartbeatAgeMs > 0 ? `${node.heartbeatAgeMs}ms` : '—',
+                        color:node.heartbeatAgeMs > 100 ? 'var(--red)' : 'var(--t2)' },
+                    ].map((m,i) => (
+                      <div key={i} style={{ padding:'8px 10px', background:'rgba(255,255,255,0.04)', borderRadius:8 }}>
+                        <div style={{ fontSize:10, color:'var(--t3)', marginBottom:2 }}>{m.label}</div>
+                        <div style={{ fontSize:14, fontWeight:700, color:m.color }}>{m.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div className="glass" style={{ padding:16 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+              Log Length by Node
+            </div>
+            <div style={{ height:130 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={consensus.map(n=>({ node:`Node ${n.nodeId}`, logLength:n.logLength }))}>
+                  <CartesianGrid stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="node" tick={{ fill:'var(--t3)', fontSize:11 }} />
+                  <YAxis tick={{ fill:'var(--t3)', fontSize:10 }} width={50} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.8)', border:'1px solid var(--border)', borderRadius:8, fontSize:11 }}
+                    formatter={v=>[v.toLocaleString(),'Log Length']} />
+                  <Bar dataKey="logLength" fill="#64D2FF" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

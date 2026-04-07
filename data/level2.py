@@ -158,3 +158,6 @@ class MockOrderBookFeed:
             asks.append((ask_price, size))
 
         await self._cache.update(symbol, bids, asks)
+
+
+from data.mbo_orderbook import MBOOrderBookCache as MBOOrderBookCache  # noqa: re-export

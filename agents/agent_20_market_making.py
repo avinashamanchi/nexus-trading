@@ -131,6 +131,8 @@ class MarketMakingAgent:
         quote_interval: float = 0.1,
         max_inventory: float = 1000.0,
         tick_size: float = 0.01,
+        lob_model: "Any | None" = None,  # LOBImbalanceModel | None
+        lob_alpha: float = 0.3,
     ) -> None:
         self._symbols = symbols
         self._bus = bus
@@ -144,6 +146,8 @@ class MarketMakingAgent:
         self._max_inventory = max_inventory
         self._tick_size = tick_size
         self._profile = profile or ColocationProfile(tier=LatencyTier.INSTITUTIONAL)
+        self._lob_model = lob_model
+        self._lob_alpha = lob_alpha
 
         # Per-symbol state
         default_params = ASTParameters()
@@ -228,6 +232,12 @@ class MarketMakingAgent:
 
         # Apply inventory skew if near limits
         skew = inventory_skew_factor(state.inventory, self._max_inventory)
+
+        # LOB imbalance model: adjust skew by predicted short-term drift
+        if self._lob_model is not None and book is not None:
+            drift = self._lob_model.predict_short_term_drift(book)
+            skew = max(-1.0, min(1.0, skew * (1.0 + drift * self._lob_alpha)))
+
         half_spread = (ask_px - bid_px) / 2.0
         bid_px += skew * half_spread * 0.5   # shift both quotes toward offload direction
         ask_px += skew * half_spread * 0.5

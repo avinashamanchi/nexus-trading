@@ -300,7 +300,7 @@ class SatelliteConnector(AltDataConnector):
         retail_symbols = {sym for sym in symbols if len(sym) <= 4}
         points = []
         for sym in symbols:
-            if sym not in retail_symbols or len(sym) > 4:
+            if sym not in retail_symbols:
                 points.append(AltDataPoint(
                     source=self.source, symbol=sym,
                     signal=AltDataSignal.INSUFFICIENT_DATA,

@@ -224,8 +224,8 @@ export default function App() {
   const pnlPositive = totalPnl >= 0
 
   const timeStr = time.toLocaleTimeString('en-US', { hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit' })
-  const etTime = new Date(time.toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  const isMarketOpen = etTime.getHours() >= 9 && etTime.getHours() < 16
+  const etHour = parseInt(time.toLocaleString('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }), 10)
+  const isMarketOpen = etHour >= 9 && etHour < 16
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden' }}>

@@ -229,8 +229,8 @@ class MarketMakingAgent:
         # Apply inventory skew if near limits
         skew = inventory_skew_factor(state.inventory, self._max_inventory)
         half_spread = (ask_px - bid_px) / 2.0
-        bid_px -= skew * half_spread * 0.5   # skew quotes toward offload
-        ask_px -= skew * half_spread * 0.5
+        bid_px += skew * half_spread * 0.5   # shift both quotes toward offload direction
+        ask_px += skew * half_spread * 0.5
 
         # Determine inventory action
         state.action = self._classify_inventory_action(state)

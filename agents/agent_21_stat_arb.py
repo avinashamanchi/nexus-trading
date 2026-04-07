@@ -481,6 +481,3 @@ class StatArbAgent:
         return self._qualified_pairs
 
 
-# ─── Import helper for type annotation ───────────────────────────────────────
-
-from core.enums import OrderSide as OrderSide  # noqa: re-export for agent_21 internal use

@@ -217,6 +217,14 @@ export function makeFuturesPositions() {
   });
 }
 
+function _erf(x) {
+  const t = 1/(1+0.3275911*Math.abs(x));
+  const poly = t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))));
+  const e = 1 - poly*Math.exp(-x*x);
+  return x >= 0 ? e : -e;
+}
+function _normCdf(x) { return 0.5*(1 + _erf(x/Math.SQRT2)); }
+
 export function makeOptionsPositions() {
   const positions = [
     { underlying:"SPY", strike:520, expDays:14, right:"call", contracts:10,  entryPrem:4.80, spot:524.0, sigma:0.18, r:0.05 },
@@ -229,28 +237,14 @@ export function makeOptionsPositions() {
     const sqrtT = Math.sqrt(T);
     const d1 = (Math.log(S/K) + (r + 0.5*sigma*sigma)*T) / (sigma*sqrtT);
     const d2 = d1 - sigma*sqrtT;
-    const N = x => 0.5*(1 + erf(x/Math.SQRT2));
-    function erf(x) {
-      const t = 1/(1+0.3275911*Math.abs(x));
-      const poly = t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))));
-      const e = 1 - poly*Math.exp(-x*x);
-      return x >= 0 ? e : -e;
-    }
-    if (right === "call") return S*N(d1) - K*Math.exp(-r*T)*N(d2);
-    return K*Math.exp(-r*T)*N(-d2) - S*N(-d1);
+    if (right === "call") return S*_normCdf(d1) - K*Math.exp(-r*T)*_normCdf(d2);
+    return K*Math.exp(-r*T)*_normCdf(-d2) - S*_normCdf(-d1);
   }
   function delta(S, K, T, r, sigma, right) {
     if (T <= 0 || sigma <= 0) return right==="call"?1:0;
     const sqrtT = Math.sqrt(T);
     const d1 = (Math.log(S/K) + (r + 0.5*sigma*sigma)*T) / (sigma*sqrtT);
-    function normCdf(x) { return 0.5*(1 + erf(x/Math.SQRT2)); }
-    function erf(x) {
-      const t = 1/(1+0.3275911*Math.abs(x));
-      const poly = t*(0.254829592+t*(-0.284496736+t*(1.421413741+t*(-1.453152027+t*1.061405429))));
-      const e = 1 - poly*Math.exp(-x*x);
-      return x >= 0 ? e : -e;
-    }
-    return right === "call" ? normCdf(d1) : normCdf(d1) - 1;
+    return right === "call" ? _normCdf(d1) : _normCdf(d1) - 1;
   }
   return positions.map(p => {
     const T = p.expDays / 365.25;

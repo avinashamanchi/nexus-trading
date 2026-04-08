@@ -124,6 +124,12 @@ class BrokerAPIError(TradingSystemError):
         super().__init__(f"Broker API error {status}: {message}")
 
 
+class FeedConnectionError(TradingSystemError):
+    """Data feed WebSocket connection failed or was rejected."""
+    def __init__(self, reason: str):
+        super().__init__(f"Feed connection error: {reason}")
+
+
 # ─── Governance Errors ─────────────────────────────────────────────────────────
 
 class UnauthorizedChangeError(TradingSystemError):

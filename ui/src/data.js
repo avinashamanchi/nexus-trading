@@ -560,3 +560,80 @@ export function makeEnterpriseDesk(tick) {
     },
   };
 }
+
+// ── Live Paper-Trading Performance ────────────────────────────────────────────
+
+export function makePerformanceData(tick) {
+  // In production this would be fetched from /api/performance
+  // For demo: load from db/performance.json via a static import or use realistic mock
+  // Returns the same shape as PerformanceStats.summary()
+
+  const baseEquity = 32150;
+  const dailyChange = Math.sin(tick * 0.08) * 45 + Math.cos(tick * 0.13) * 30;
+  const currentEquity = +(baseEquity + dailyChange).toFixed(2);
+
+  // 90-day equity curve — realistic upward drift with noise
+  const startEquity = 30000;
+  const equityCurve = Array.from({ length: 90 }, (_, i) => {
+    const date = new Date('2026-01-08');
+    date.setDate(date.getDate() + i);
+    const trend = startEquity + (i / 89) * (baseEquity - startEquity);
+    const noise = Math.sin(i * 0.4 + 1.2) * 180 + Math.sin(i * 0.17) * 90;
+    const equity = Math.max(startEquity * 0.93, trend + noise);
+    return {
+      date: date.toISOString().slice(0, 10),
+      equity: +equity.toFixed(2),
+      daily_pnl: +(noise * 0.05 + (baseEquity - startEquity) / 89).toFixed(2),
+      daily_return: +((noise * 0.05 + (baseEquity - startEquity) / 89) / equity * 100).toFixed(4),
+    };
+  });
+
+  // Recent trades
+  const symbols = ['AAPL','MSFT','NVDA','SPY','QQQ','TSLA','AMZN','META'];
+  const recentTrades = Array.from({ length: 15 }, (_, i) => {
+    const isWin = (i % 5 !== 3);  // ~72% win rate in recent trades
+    const pnl = isWin ? (45 + Math.random() * 80) : -(25 + Math.random() * 55);
+    const entryPrice = 100 + Math.random() * 300;
+    const sym = symbols[i % symbols.length];
+    return {
+      trade_id: `T${1000 + i}`,
+      symbol: sym,
+      side: i % 3 === 0 ? 'sell' : 'buy',
+      qty: 10 + Math.floor(Math.random() * 40),
+      entry_price: +entryPrice.toFixed(2),
+      exit_price: +(entryPrice + (isWin ? 1.2 : -0.8) * (1 + Math.random())).toFixed(2),
+      pnl: +pnl.toFixed(2),
+      pnl_pct: +(pnl / (entryPrice * 20) * 100).toFixed(3),
+      opened_at: new Date(Date.now() - (15 - i) * 3600000 * 8).toISOString(),
+      closed_at: new Date(Date.now() - (15 - i) * 3600000 * 8 + 2700000).toISOString(),
+      duration_min: 25 + Math.floor(Math.random() * 60),
+      exit_reason: isWin ? 'profit_target' : (Math.random() > 0.5 ? 'time_stop' : 'momentum_failure'),
+    };
+  });
+
+  return {
+    start_date: '2026-01-08',
+    last_updated: new Date().toISOString(),
+    starting_equity: 30000,
+    current_equity: currentEquity,
+    total_pnl: +(currentEquity - 30000).toFixed(2),
+    total_return_pct: +((currentEquity - 30000) / 30000 * 100).toFixed(3),
+    sharpe_ratio: +(1.24 + Math.sin(tick * 0.02) * 0.08).toFixed(3),
+    sortino_ratio: +(1.87 + Math.sin(tick * 0.02) * 0.12).toFixed(3),
+    max_drawdown_pct: +(4.82 + Math.sin(tick * 0.03) * 0.1).toFixed(3),
+    current_drawdown_pct: +(Math.max(0, 1.2 + Math.sin(tick * 0.07) * 0.8)).toFixed(3),
+    win_rate: +(0.584 + Math.sin(tick * 0.05) * 0.008).toFixed(4),
+    avg_win_usd: +(87.40 + Math.sin(tick * 0.04) * 3).toFixed(2),
+    avg_loss_usd: +(61.20 + Math.sin(tick * 0.04) * 2).toFixed(2),
+    expectancy_usd: +(87.4 * 0.584 - 61.2 * 0.416).toFixed(2),
+    total_trades: 187 + Math.floor(tick / 120),
+    winning_trades: 109 + Math.floor(tick / 200),
+    losing_trades: 78,
+    trades_per_day: +(2.8 + Math.sin(tick * 0.06) * 0.3).toFixed(2),
+    current_streak: 3,
+    best_trade_usd: 312.40,
+    worst_trade_usd: -187.20,
+    equity_curve: equityCurve,
+    recent_trades: recentTrades,
+  };
+}

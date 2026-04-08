@@ -8,7 +8,7 @@ import {
   makeMMPositions, makeStatArbPositions, makeAltDataSignals, makeCATSummary, makeBacktestResults,
   makeFXPositions, makeFuturesPositions, makeOptionsPositions, makeSandboxStrategies,
   makeHFTTransportStats, makeHFTOrderBook, makeHFTRouting, makeHFTConsensus, makeHFTSilicon,
-  makeEnterpriseDesk
+  makeEnterpriseDesk, makePerformanceData
 } from './data'
 import './App.css'
 
@@ -192,7 +192,7 @@ function PipelineFlow({ steps }) {
 }
 
 // ── Main App ────────────────────────────────────────────────────────────────
-const TABS = ['dashboard','agents','positions','institutional','multi-asset','audit','health','hft','enterprise']
+const TABS = ['dashboard','agents','positions','institutional','multi-asset','audit','health','hft','enterprise','track-record']
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
@@ -286,6 +286,7 @@ export default function App() {
         {tab === 'health'        && <HealthTab health={health} tick={tick} />}
         {tab === 'hft'           && <HFTTab tick={tick} />}
         {tab === 'enterprise'    && <EnterpriseTab tick={tick} />}
+        {tab === 'track-record'  && <TrackRecordTab tick={tick} />}
       </div>
 
       {ksOpen && <KillSwitchModal onClose={() => setKsOpen(false)} />}
@@ -1826,6 +1827,141 @@ function EnterpriseTab({ tick }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Track Record Tab ─────────────────────────────────────────────────────────
+function TrackRecordTab({ tick }) {
+  const p = makePerformanceData(tick)
+  const pnlPos = p.total_pnl >= 0
+  const returnColor = pnlPos ? 'var(--green)' : 'var(--red)'
+
+  const metrics = [
+    { label: 'Total Return',    value: `${pnlPos?'+':''}${p.total_return_pct.toFixed(2)}%`, color: returnColor },
+    { label: 'Sharpe Ratio',    value: p.sharpe_ratio.toFixed(2),   color: p.sharpe_ratio >= 1 ? 'var(--green)' : 'var(--yellow)' },
+    { label: 'Max Drawdown',    value: `-${p.max_drawdown_pct.toFixed(2)}%`, color: 'var(--yellow)' },
+    { label: 'Win Rate',        value: `${(p.win_rate*100).toFixed(1)}%`,    color: 'var(--blue)' },
+    { label: 'Total Trades',    value: p.total_trades,              color: 'var(--t1)' },
+    { label: 'Expectancy',      value: `$${p.expectancy_usd.toFixed(2)}`,   color: p.expectancy_usd >= 0 ? 'var(--green)' : 'var(--red)' },
+    { label: 'Avg Win',         value: `$${p.avg_win_usd.toFixed(2)}`,      color: 'var(--green)' },
+    { label: 'Avg Loss',        value: `-$${p.avg_loss_usd.toFixed(2)}`,    color: 'var(--red)' },
+  ]
+
+  return (
+    <div style={{ flex:1, overflow:'auto', padding:20, display:'flex', flexDirection:'column', gap:16 }}>
+
+      {/* Header KPIs */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12 }}>
+        {[
+          { label:'Current Equity',  value:`$${p.current_equity.toLocaleString(undefined,{minimumFractionDigits:2})}`, color:'var(--t1)', sub:`started $${p.starting_equity.toLocaleString()}` },
+          { label:'Total P&L',       value:`${pnlPos?'+':''}$${p.total_pnl.toLocaleString(undefined,{minimumFractionDigits:2})}`, color:returnColor, sub:`${p.start_date} → today` },
+          { label:'Sortino Ratio',   value:p.sortino_ratio.toFixed(2), color:'var(--green)', sub:'downside-adj Sharpe' },
+          { label:'Trades / Day',    value:p.trades_per_day.toFixed(1), color:'var(--blue)', sub:`${p.total_trades} total` },
+        ].map((m,i) => (
+          <div key={i} className="glass" style={{ padding:20, animation:`slide-up .3s ${i*0.06}s both` }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:6 }}>{m.label}</div>
+            <div style={{ fontSize:26, fontWeight:800, color:m.color, lineHeight:1 }}>{m.value}</div>
+            <div style={{ fontSize:11, color:'var(--t3)', marginTop:4 }}>{m.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Equity curve */}
+      <div className="glass" style={{ padding:20 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+          <div>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:2 }}>90-Day Equity Curve</div>
+            <div style={{ fontSize:18, fontWeight:700, color:'var(--t1)' }}>Paper Account — Shadow Mode</div>
+          </div>
+          <div style={{ display:'flex', gap:16 }}>
+            <span style={{ fontSize:12, color:'var(--t2)' }}>Sharpe <b style={{color:'var(--green)'}}>{p.sharpe_ratio.toFixed(2)}</b></span>
+            <span style={{ fontSize:12, color:'var(--t2)' }}>MaxDD <b style={{color:'var(--yellow)'}}>-{p.max_drawdown_pct.toFixed(1)}%</b></span>
+            <span style={{ fontSize:12, color:'var(--t2)' }}>Win <b style={{color:'var(--blue)'}}>{(p.win_rate*100).toFixed(1)}%</b></span>
+          </div>
+        </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <AreaChart data={p.equity_curve} margin={{ top:4, right:8, left:0, bottom:0 }}>
+            <defs>
+              <linearGradient id="eqGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%"  stopColor="#32D74B" stopOpacity={0.35} />
+                <stop offset="95%" stopColor="#32D74B" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+            <XAxis dataKey="date" tick={{ fill:'rgba(255,255,255,.35)', fontSize:10 }}
+              tickFormatter={d => d.slice(5)} interval={13} />
+            <YAxis tick={{ fill:'rgba(255,255,255,.35)', fontSize:10 }}
+              tickFormatter={v => `$${(v/1000).toFixed(1)}k`} domain={['auto','auto']} />
+            <Tooltip contentStyle={{ background:'#1c1c1e', border:'1px solid rgba(255,255,255,.12)', borderRadius:8, fontSize:12 }}
+              formatter={(v) => [`$${v.toLocaleString(undefined,{minimumFractionDigits:2})}`, 'Equity']}
+              labelStyle={{ color:'rgba(255,255,255,.6)' }} />
+            <ReferenceLine y={p.starting_equity} stroke="rgba(255,255,255,.2)" strokeDasharray="4 4"
+              label={{ value:'Start', fill:'rgba(255,255,255,.3)', fontSize:10 }} />
+            <Area type="monotone" dataKey="equity" stroke="#32D74B" strokeWidth={2}
+              fill="url(#eqGrad)" dot={false} activeDot={{ r:4, fill:'#32D74B' }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Metric grid + Recent trades */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+        <div className="glass" style={{ padding:20 }}>
+          <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:14 }}>Performance Metrics</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            {metrics.map((m,i) => (
+              <div key={i} style={{ background:'rgba(255,255,255,.04)', borderRadius:8, padding:'10px 14px' }}>
+                <div style={{ fontSize:10, color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:4 }}>{m.label}</div>
+                <div style={{ fontSize:18, fontWeight:700, color:m.color }}>{m.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="glass" style={{ padding:20 }}>
+          <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:14 }}>Recent Trades</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:280, overflow:'auto' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'60px 1fr 50px 50px 70px', gap:8,
+              fontSize:10, color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.05em', paddingBottom:6,
+              borderBottom:'1px solid rgba(255,255,255,.08)' }}>
+              <span>Symbol</span><span>Exit Reason</span><span>Qty</span><span>Side</span><span style={{textAlign:'right'}}>P&L</span>
+            </div>
+            {p.recent_trades.map((t,i) => {
+              const win = t.pnl >= 0
+              return (
+                <div key={i} style={{ display:'grid', gridTemplateColumns:'60px 1fr 50px 50px 70px', gap:8,
+                  fontSize:12, padding:'5px 0', borderBottom:'1px solid rgba(255,255,255,.04)', alignItems:'center' }}>
+                  <span style={{ fontWeight:700, color:'var(--t1)' }}>{t.symbol}</span>
+                  <span style={{ fontSize:10, color:'var(--t3)' }}>{t.exit_reason.replace(/_/g,' ')}</span>
+                  <span style={{ color:'var(--t2)' }}>{t.qty}</span>
+                  <span className={`badge badge-${t.side==='buy'?'blue':'yellow'}`} style={{ fontSize:9 }}>{t.side}</span>
+                  <span style={{ textAlign:'right', fontWeight:700, color:win?'var(--green)':'var(--red)' }}>
+                    {win?'+':''}{t.pnl >= 0 ? '' : '-'}${Math.abs(t.pnl).toFixed(2)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Daily P&L histogram */}
+      <div className="glass" style={{ padding:20 }}>
+        <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:14 }}>Daily P&L — Last 30 Days</div>
+        <ResponsiveContainer width="100%" height={140}>
+          <BarChart data={p.equity_curve.slice(-30)} margin={{ top:4, right:8, left:0, bottom:0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+            <XAxis dataKey="date" tick={{ fill:'rgba(255,255,255,.3)', fontSize:9 }} tickFormatter={d => d.slice(5)} interval={4} />
+            <YAxis tick={{ fill:'rgba(255,255,255,.3)', fontSize:9 }} tickFormatter={v => `$${v.toFixed(0)}`} />
+            <Tooltip contentStyle={{ background:'#1c1c1e', border:'1px solid rgba(255,255,255,.12)', borderRadius:8, fontSize:11 }}
+              formatter={(v) => [`$${(+v).toFixed(2)}`, 'Daily P&L']}
+              labelStyle={{ color:'rgba(255,255,255,.6)' }} />
+            <ReferenceLine y={0} stroke="rgba(255,255,255,.25)" />
+            <Bar dataKey="daily_pnl" radius={[3,3,0,0]} fill="#32D74B" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
     </div>
   )
 }

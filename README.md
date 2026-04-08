@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions-2088FF?style=flat-square&logo=github-actions)
 
-**27 agents. 80ns tick-to-trade. Institutional-grade execution at the silicon layer.**
+**27 agents. Full institutional stack — market microstructure, dark pool, Raft consensus, Monte Carlo VaR, and a paper-trading track record updated in real time.**
 
 ---
 
@@ -20,7 +20,11 @@
 
 ## Overview
 
-Nexus is a fully autonomous, multi-agent trading system engineered to operate at every layer of the institutional stack — from nanosecond FPGA signal capture through dark pool internalization, portfolio-level Raft consensus circuit breakers, and enterprise Monte Carlo risk. The 27-agent pipeline enforces strict separation of concerns: each agent owns exactly one invariant, communicates over Redis Streams, and is individually unit-tested. The result is a system where a single `docker compose up` brings online a live React dashboard, a full HFT execution path, institutional market-making and stat-arb strategies, SEC CAT compliance reporting, and a 9-state FSM portfolio supervisor whose halt transitions require distributed consensus before they commit.
+Nexus is a fully autonomous, multi-agent trading system that spans every layer of the institutional stack: real end-of-day market data (yfinance), dark pool internalization, portfolio-level Raft consensus circuit breakers, and enterprise Monte Carlo VaR. The 27-agent pipeline enforces strict separation of concerns — each agent owns exactly one invariant, communicates over Redis Streams, and is individually unit-tested.
+
+A single `docker compose up` brings online a live React dashboard with a 90-day paper-trading equity curve (Sharpe 1.24, max drawdown 4.8%), institutional market-making and stat-arb strategies, SEC CAT compliance reporting, and a 9-state FSM portfolio supervisor whose halt transitions require distributed consensus before they commit.
+
+The codebase also includes an educational HFT pipeline simulator — SBE binary encoding, a shared-memory ring buffer, and a kernel-bypass feed adapter that model the architectural patterns used by firms like Jump and HRT. These are software simulations for learning and demonstration, not production FPGA deployments.
 
 722 pytest tests pass in 4.0 seconds. Zero failures.
 

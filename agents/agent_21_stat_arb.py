@@ -113,6 +113,7 @@ class StatArbAgent:
         get_prices_fn: Callable[[list[str], int], dict[str, list[float]]],
         submit_order_fn: Callable,
         config: dict | None = None,
+        microwave_route: "Any | None" = None,
     ) -> None:
         self._pair_universe = pair_universe
         self._bus = bus
@@ -120,6 +121,7 @@ class StatArbAgent:
         self._audit = audit
         self._get_prices_fn = get_prices_fn
         self._submit_order_fn = submit_order_fn
+        self._microwave_route = microwave_route
 
         cfg = config or {}
         self._z_entry = cfg.get("z_entry", 2.0)

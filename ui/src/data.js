@@ -379,3 +379,69 @@ export function makeHFTConsensus(tick) {
     commitIndex: 1020 + tick * 2,
   }));
 }
+
+export function makeHFTSilicon(tick) {
+  const fpgaLatencyNs = 80 + Math.round(Math.sin(tick * 0.2) * 5);
+  const microwaveMs = +(3.97 + Math.sin(tick * 0.1) * 0.02).toFixed(3);
+  const fiberMs = 6.87;
+  return {
+    fpga: {
+      latency_ns: fpgaLatencyNs,
+      pipeline_stages: 5,
+      clock_mhz: 250,
+      frames_processed: 1024 * 8 + tick * 17,
+      signals_generated: 342 + tick * 2,
+      risk_rejections: 12 + Math.floor(tick / 10),
+      throughput_mps: 250,
+      vs_software_us: 2.1,
+      hist: Array.from({ length: 20 }, (_, i) => ({
+        t: i,
+        ns: 76 + Math.round(Math.sin((tick + i) * 0.35) * 8 + Math.random() * 4),
+      })),
+    },
+    microwave: {
+      latency_ms: microwaveMs,
+      fiber_ms: fiberMs,
+      advantage_ms: +(fiberMs - microwaveMs).toFixed(3),
+      hops: 15,
+      delivery_prob: +(0.9985 - Math.random() * 0.0002).toFixed(5),
+      weather: 'clear',
+      ticks_arbitraged: 287 + tick,
+      total_pnl_usd: +(142_000 + tick * 450).toFixed(0),
+    },
+    dma: {
+      latency_ns: 220,
+      broker_latency_us: 2000,
+      advantage_ns: 1_779_780,
+      orders_submitted: 4812 + tick * 3,
+      daily_rebate_usd: +(2_340 + tick * 0.8).toFixed(2),
+      venues: [
+        { venue: 'NASDAQ', rebate_per_share: 0.00200, daily_shares: 412_000 + tick * 100, active: true },
+        { venue: 'NYSE',   rebate_per_share: 0.00150, daily_shares: 218_000 + tick * 50,  active: true },
+        { venue: 'BATS',   rebate_per_share: 0.00320, daily_shares: 156_000 + tick * 30,  active: true },
+      ],
+    },
+    clearing: {
+      gross_trades: 9_814 + tick * 4,
+      gross_shares: 8_200_000 + tick * 400,
+      net_shares:   124_000 + tick * 10,
+      netting_efficiency: +(0.015 + Math.sin(tick * 0.05) * 0.003).toFixed(4),
+      fee_savings_usd: +(8_036 + tick * 0.4).toFixed(2),
+      symbols_settling: 47,
+      guarantee_fund_m: 25,
+    },
+    onlineLearner: {
+      buffer_size: Math.min(1000, 120 + tick * 3),
+      retrain_count: 14 + Math.floor(tick / 60),
+      swap_count: 9 + Math.floor(tick / 90),
+      mean_error: +(0.042 + Math.sin(tick * 0.07) * 0.008).toFixed(4),
+      last_retrain_ago_s: Math.round((tick % 900)),
+      cluster_gpus: 8,
+      cluster_bandwidth_gbps: 200,
+      training_hist: Array.from({ length: 12 }, (_, i) => ({
+        t: `T-${11-i}m`,
+        error: +(0.035 + Math.sin((tick + i) * 0.3) * 0.012 + Math.random() * 0.005).toFixed(4),
+      })),
+    },
+  };
+}

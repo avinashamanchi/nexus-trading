@@ -7,7 +7,7 @@ import {
   AGENTS, makeLivePnl, makePipeline, makePositions, makeAuditLog, makeHealth,
   makeMMPositions, makeStatArbPositions, makeAltDataSignals, makeCATSummary, makeBacktestResults,
   makeFXPositions, makeFuturesPositions, makeOptionsPositions, makeSandboxStrategies,
-  makeHFTTransportStats, makeHFTOrderBook, makeHFTRouting, makeHFTConsensus
+  makeHFTTransportStats, makeHFTOrderBook, makeHFTRouting, makeHFTConsensus, makeHFTSilicon
 } from './data'
 import './App.css'
 
@@ -1158,6 +1158,7 @@ function HFTTab({ tick }) {
   const orderBook = makeHFTOrderBook(tick)
   const routing = makeHFTRouting(tick)
   const consensus = makeHFTConsensus(tick)
+  const silicon = makeHFTSilicon(tick)
 
   const spoofColor = r => r === 'CRITICAL' ? 'var(--red)' : r === 'HIGH' ? '#ff6b35' : r === 'MEDIUM' ? 'var(--yellow)' : r === 'LOW' ? '#64D2FF' : 'var(--t3)'
   const spoofBadge = r => r === 'CRITICAL' ? 'red' : r === 'HIGH' ? 'red' : r === 'MEDIUM' ? 'yellow' : r === 'LOW' ? 'blue' : null
@@ -1167,7 +1168,7 @@ function HFTTab({ tick }) {
       <div style={{ display:'flex', gap:12, alignItems:'center', flexWrap:'wrap' }}>
         <h2 style={{ fontSize:20, fontWeight:700 }}>HFT Infrastructure</h2>
         <div className="tab-bar">
-          {[['transport','Transport'],['orderbook','Order Book'],['routing','Routing'],['consensus','Consensus']].map(([k,v]) => (
+          {[['transport','Transport'],['orderbook','Order Book'],['routing','Routing'],['consensus','Consensus'],['silicon','Silicon']].map(([k,v]) => (
             <button key={k} className={`tab${subTab===k?' active':''}`} onClick={()=>setSubTab(k)}>{v}</button>
           ))}
         </div>
@@ -1435,6 +1436,179 @@ function HFTTab({ tick }) {
                   <Bar dataKey="logLength" fill="#64D2FF" radius={[4,4,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Silicon (FPGA + Microwave + DMA + Clearing + Online ML) ── */}
+      {subTab === 'silicon' && (
+        <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+          {/* Hero metrics */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:12 }}>
+            {[
+              { label:'FPGA Latency',       value:`${silicon.fpga.latency_ns} ns`,               color:'#64D2FF',     sub:'vs 2µs software' },
+              { label:'Microwave Advantage', value:`+${silicon.microwave.advantage_ms} ms`,       color:'var(--green)', sub:'vs fiber' },
+              { label:'DMA Path',            value:`${silicon.dma.latency_ns} ns`,                color:'var(--purple)', sub:'vs 2ms broker' },
+              { label:'Daily Rebates',       value:`$${Number(silicon.dma.daily_rebate_usd).toLocaleString()}`, color:'var(--yellow)', sub:'maker fills' },
+              { label:'Clearing Savings',    value:`$${Number(silicon.clearing.fee_savings_usd).toLocaleString()}`, color:'var(--green)', sub:'vs broker clearing' },
+            ].map((m,i) => (
+              <div key={i} className="glass" style={{ padding:16 }}>
+                <div style={{ fontSize:11, color:'var(--t2)', marginBottom:4, textTransform:'uppercase', letterSpacing:'.06em' }}>{m.label}</div>
+                <div style={{ fontSize:18, fontWeight:800, color:m.color }}>{m.value}</div>
+                {m.sub && <div style={{ fontSize:10, color:'var(--t3)', marginTop:2 }}>{m.sub}</div>}
+              </div>
+            ))}
+          </div>
+
+          {/* FPGA Pipeline */}
+          <div className="glass" style={{ padding:16 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+              FPGA Pipeline — {silicon.fpga.pipeline_stages} stages × 4 ns @ {silicon.fpga.clock_mhz} MHz
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8, marginBottom:12 }}>
+              {['Decode','Signal','Risk','Encode','Transmit'].map((s,i) => (
+                <div key={i} style={{ padding:'8px', background:'rgba(100,210,255,0.08)', borderRadius:8, border:'1px solid rgba(100,210,255,0.2)', textAlign:'center' }}>
+                  <div style={{ fontSize:9, color:'var(--t3)', textTransform:'uppercase', letterSpacing:'.05em' }}>Stage {i}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:'#64D2FF', marginTop:2 }}>{s}</div>
+                  <div style={{ fontSize:10, color:'var(--t2)' }}>4 ns</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ height:100 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={silicon.fpga.hist}>
+                  <defs>
+                    <linearGradient id="fpgaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#64D2FF" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#64D2FF" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="t" hide />
+                  <YAxis domain={[60,100]} tick={{ fill:'var(--t3)', fontSize:10 }} width={35} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.8)', border:'1px solid var(--border)', borderRadius:8, fontSize:11 }}
+                    formatter={v=>[`${v} ns`,'FPGA latency']} />
+                  <Area type="monotone" dataKey="ns" stroke="#64D2FF" fill="url(#fpgaGrad)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Microwave + DMA side-by-side */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+            {/* Microwave */}
+            <div className="glass" style={{ padding:16 }}>
+              <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+                Microwave Network — CME Aurora → Equinix NY4
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                {[
+                  { label:'Microwave', value:`${silicon.microwave.latency_ms} ms`, color:'var(--green)' },
+                  { label:'Fiber',     value:`${silicon.microwave.fiber_ms} ms`,   color:'var(--t3)' },
+                  { label:'Advantage', value:`${silicon.microwave.advantage_ms} ms`, color:'#FFD60A' },
+                  { label:'Hops',      value:silicon.microwave.hops,              color:'var(--t2)' },
+                ].map((m,i) => (
+                  <div key={i} style={{ padding:'8px 10px', background:'rgba(255,255,255,0.04)', borderRadius:8 }}>
+                    <div style={{ fontSize:10, color:'var(--t3)', marginBottom:2 }}>{m.label}</div>
+                    <div style={{ fontSize:14, fontWeight:700, color:m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize:10, color:'var(--t2)', marginTop:4 }}>
+                Delivery: {(silicon.microwave.delivery_prob * 100).toFixed(3)}% &nbsp;·&nbsp;
+                Weather: {silicon.microwave.weather} &nbsp;·&nbsp;
+                Ticks arbed: {silicon.microwave.ticks_arbitraged.toLocaleString()}
+              </div>
+              <div style={{ fontSize:12, fontWeight:700, color:'var(--green)', marginTop:6 }}>
+                Stat-arb P&L from microwave: ${Number(silicon.microwave.total_pnl_usd).toLocaleString()}
+              </div>
+            </div>
+
+            {/* DMA */}
+            <div className="glass" style={{ padding:16 }}>
+              <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+                Direct Market Access — Maker Rebates
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                {[
+                  { label:'DMA Path',    value:`${silicon.dma.latency_ns} ns`,   color:'var(--purple)' },
+                  { label:'Broker Path', value:'2,000 µs',                        color:'var(--t3)' },
+                  { label:'Orders/day',  value:silicon.dma.orders_submitted.toLocaleString(), color:'var(--t1)' },
+                  { label:'Daily Rebate', value:`$${Number(silicon.dma.daily_rebate_usd).toLocaleString()}`, color:'var(--green)' },
+                ].map((m,i) => (
+                  <div key={i} style={{ padding:'8px 10px', background:'rgba(255,255,255,0.04)', borderRadius:8 }}>
+                    <div style={{ fontSize:10, color:'var(--t3)', marginBottom:2 }}>{m.label}</div>
+                    <div style={{ fontSize:14, fontWeight:700, color:m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              {silicon.dma.venues.map((v,i) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:11,
+                  padding:'4px 0', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
+                  <span style={{ color:'var(--t2)' }}>{v.venue}</span>
+                  <span style={{ color:'var(--t2)' }}>{v.daily_shares.toLocaleString()} shares</span>
+                  <span style={{ color:'var(--green)' }}>+${(v.daily_shares * v.rebate_per_share).toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Self-Clearing + Online Learner side-by-side */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16 }}>
+            {/* DTCC Clearing */}
+            <div className="glass" style={{ padding:16 }}>
+              <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+                DTCC Self-Clearing — CNS Netting
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                {[
+                  { label:'Gross Trades',      value:silicon.clearing.gross_trades.toLocaleString(), color:'var(--t1)' },
+                  { label:'Gross Shares',      value:(silicon.clearing.gross_shares/1e6).toFixed(1)+'M', color:'var(--t1)' },
+                  { label:'Net to Settle',     value:(silicon.clearing.net_shares/1e3).toFixed(0)+'K', color:'var(--blue)' },
+                  { label:'Netting Ratio',     value:`${(silicon.clearing.netting_efficiency*100).toFixed(1)}%`, color:'var(--green)' },
+                  { label:'Fee Savings/day',   value:`$${Number(silicon.clearing.fee_savings_usd).toLocaleString()}`, color:'var(--green)' },
+                  { label:'Guarantee Fund',    value:`$${silicon.clearing.guarantee_fund_m}M`, color:'var(--yellow)' },
+                ].map((m,i) => (
+                  <div key={i} style={{ padding:'8px 10px', background:'rgba(255,255,255,0.04)', borderRadius:8 }}>
+                    <div style={{ fontSize:10, color:'var(--t3)', marginBottom:2 }}>{m.label}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Online LOB Learner */}
+            <div className="glass" style={{ padding:16 }}>
+              <div style={{ fontSize:11, color:'var(--t2)', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:12 }}>
+                Intraday AI Retraining — InfiniBand {silicon.onlineLearner.cluster_bandwidth_gbps} Gbps
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+                {[
+                  { label:'Buffer',        value:`${silicon.onlineLearner.buffer_size}/1000`, color:'var(--t1)' },
+                  { label:'Retrains',      value:silicon.onlineLearner.retrain_count, color:'var(--blue)' },
+                  { label:'Hot-Swaps',     value:silicon.onlineLearner.swap_count, color:'var(--purple)' },
+                  { label:'Mean Error',    value:silicon.onlineLearner.mean_error, color:'var(--yellow)' },
+                  { label:'Last Retrain',  value:`${silicon.onlineLearner.last_retrain_ago_s}s ago`, color:'var(--t2)' },
+                  { label:'GPU Cluster',   value:`${silicon.onlineLearner.cluster_gpus}× H100`, color:'var(--green)' },
+                ].map((m,i) => (
+                  <div key={i} style={{ padding:'8px 10px', background:'rgba(255,255,255,0.04)', borderRadius:8 }}>
+                    <div style={{ fontSize:10, color:'var(--t3)', marginBottom:2 }}>{m.label}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:m.color }}>{m.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ fontSize:11, color:'var(--t2)', marginBottom:6 }}>Prediction Error — rolling 12 min</div>
+              <div style={{ height:70 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={silicon.onlineLearner.training_hist}>
+                    <YAxis domain={['auto','auto']} tick={{ fill:'var(--t3)', fontSize:9 }} width={30} />
+                    <Tooltip contentStyle={{ background:'rgba(0,0,0,0.8)', border:'1px solid var(--border)', borderRadius:8, fontSize:10 }}
+                      formatter={v=>[v,'Error']} />
+                    <Line type="monotone" dataKey="error" stroke="#BF5AF2" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>

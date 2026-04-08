@@ -75,6 +75,7 @@ class MicroSignalAgent(BaseAgent):
         order_book: OrderBookCache,
         open_positions_fn: Callable[[], list[str]],
         config: dict | None = None,
+        fpga_pipeline: "Any | None" = None,
     ) -> None:
         super().__init__(
             agent_id=AGENT_IDS[4],
@@ -87,6 +88,7 @@ class MicroSignalAgent(BaseAgent):
         self._data_feed = data_feed
         self._order_book = order_book
         self._open_positions_fn = open_positions_fn
+        self._fpga_pipeline = fpga_pipeline
 
         # ── Mutable state (updated by bus messages) ──────────────────────────
         self._approved_setups: ApprovedSetupList | None = None

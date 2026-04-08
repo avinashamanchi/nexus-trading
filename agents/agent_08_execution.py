@@ -69,7 +69,8 @@ class ExecutionAgent(BaseAgent):
         broker: BrokerBase,
         data_feed: Any,          # DataFeed — for re-fetching latest tick
         config: dict | None = None,
-        sor: "Any | None" = None,  # ToxicitySOR | None — optional toxicity-aware SOR
+        sor: "Any | None" = None,      # ToxicitySOR | None
+        dma_path: "Any | None" = None, # DMAOrderPath | None
     ) -> None:
         super().__init__(
             agent_id="agent_08_execution",
@@ -82,6 +83,7 @@ class ExecutionAgent(BaseAgent):
         self.broker = broker
         self.data_feed = data_feed
         self._sor = sor
+        self._dma_path = dma_path
 
         # ── State ──────────────────────────────────────────────────────────────
         # Gate: remains False until at least one CLEAN reconciliation received.

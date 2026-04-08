@@ -164,6 +164,14 @@ class LOBImbalanceModel:
         self._mean = _DEFAULT_MEAN.copy()
         self._std = _DEFAULT_STD.copy()
 
+    @property
+    def coefficients(self) -> np.ndarray:
+        return self._coeffs
+
+    @coefficients.setter
+    def coefficients(self, value: np.ndarray) -> None:
+        self._coeffs = value.astype(np.float64)
+
     def predict_short_term_drift(self, book) -> float:
         """Return predicted short-term price drift in [-1.0, +1.0]."""
         features = extract_features(book)

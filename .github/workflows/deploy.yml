@@ -25,6 +25,8 @@ jobs:
       - name: Build
         working-directory: ui
         run: npm run build
+        env:
+          VITE_BASE_URL: /nexus-trading/
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v3

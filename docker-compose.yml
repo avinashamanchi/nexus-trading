@@ -1,0 +1,64 @@
+version: '3.9'
+
+# ── Nexus Autonomous Trading System ─────────────────────────────────────────
+# One command to run the full stack:
+#
+#   docker compose up
+#
+# Services:
+#   redis     — message bus + state store  → localhost:6379
+#   nexus     — 27-agent Python backend    → shadow mode (no broker keys needed)
+#   ui        — React dashboard            → localhost:3000
+#
+# Live trading (requires Alpaca keys in .env):
+#   TRADING_MODE=paper docker compose up
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  nexus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      TRADING_MODE: ${TRADING_MODE:-shadow}
+      REDIS_URL: redis://redis:6379/0
+      ALPACA_API_KEY: ${ALPACA_API_KEY:-demo_key}
+      ALPACA_SECRET_KEY: ${ALPACA_SECRET_KEY:-demo_secret}
+      ALPACA_BASE_URL: ${ALPACA_BASE_URL:-https://paper-api.alpaca.markets}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./logs:/app/logs
+      - ./db:/app/db
+    ports:
+      - "8080:8080"   # WebSocket feed (if enabled)
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - nexus
+
+volumes:
+  redis_data:

@@ -7,7 +7,8 @@ import {
   AGENTS, makeLivePnl, makePipeline, makePositions, makeAuditLog, makeHealth,
   makeMMPositions, makeStatArbPositions, makeAltDataSignals, makeCATSummary, makeBacktestResults,
   makeFXPositions, makeFuturesPositions, makeOptionsPositions, makeSandboxStrategies,
-  makeHFTTransportStats, makeHFTOrderBook, makeHFTRouting, makeHFTConsensus, makeHFTSilicon
+  makeHFTTransportStats, makeHFTOrderBook, makeHFTRouting, makeHFTConsensus, makeHFTSilicon,
+  makeEnterpriseDesk
 } from './data'
 import './App.css'
 
@@ -191,7 +192,7 @@ function PipelineFlow({ steps }) {
 }
 
 // ── Main App ────────────────────────────────────────────────────────────────
-const TABS = ['dashboard','agents','positions','institutional','multi-asset','audit','health','hft']
+const TABS = ['dashboard','agents','positions','institutional','multi-asset','audit','health','hft','enterprise']
 
 export default function App() {
   const [tab, setTab] = useState('dashboard')
@@ -284,6 +285,7 @@ export default function App() {
         {tab === 'audit'         && <AuditTab audit={audit} />}
         {tab === 'health'        && <HealthTab health={health} tick={tick} />}
         {tab === 'hft'           && <HFTTab tick={tick} />}
+        {tab === 'enterprise'    && <EnterpriseTab tick={tick} />}
       </div>
 
       {ksOpen && <KillSwitchModal onClose={() => setKsOpen(false)} />}
@@ -1609,6 +1611,217 @@ function HFTTab({ tick }) {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  Enterprise Desk Tab (Layers 15–18)
+// ══════════════════════════════════════════════════════════════════════════════
+function EnterpriseTab({ tick }) {
+  const [subTab, setSubTab] = useState('algos')
+  const d = makeEnterpriseDesk(tick)
+  const subTabs = [['algos','Algos'],['ptp','PTP Sync'],['darkpool','Dark Pool'],['var','VaR']]
+
+  const MetricCard = ({ label, value, sub, color='#64D2FF' }) => (
+    <div style={{ flex:1, minWidth:120, padding:'12px 14px', background:'rgba(255,255,255,0.04)', borderRadius:10, border:'1px solid var(--border)' }}>
+      <div style={{ fontSize:10, color:'var(--t3)', marginBottom:4 }}>{label}</div>
+      <div style={{ fontSize:18, fontWeight:800, color, lineHeight:1 }}>{value}</div>
+      {sub && <div style={{ fontSize:10, color:'var(--t2)', marginTop:4 }}>{sub}</div>}
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ display:'flex', gap:6, marginBottom:16, flexWrap:'wrap' }}>
+        {subTabs.map(([k,v]) => (
+          <button key={k} onClick={() => setSubTab(k)}
+            style={{ padding:'6px 14px', borderRadius:20, border:'none', cursor:'pointer', fontSize:12, fontWeight:600,
+              background: subTab===k ? 'var(--blue)' : 'rgba(255,255,255,0.06)', color: subTab===k ? '#fff' : 'var(--t2)' }}>
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'algos' && (
+        <div>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:16 }}>
+            <MetricCard label="Algorithm"      value={d.algo.algo_type.toUpperCase()} sub="Block desk" color='var(--blue)' />
+            <MetricCard label="Parent Order"   value={`${(d.algo.total_qty/1e6).toFixed(1)}M shares`} sub={d.algo.symbol} color='var(--t1)' />
+            <MetricCard label="Fill Rate"      value={`${(d.algo.fill_rate*100).toFixed(1)}%`} sub={`${d.algo.slices_sent.toLocaleString()} slices`} color='var(--green)' />
+            <MetricCard label="Tracking Error" value={`${d.algo.tracking_error_bps > 0 ? '+' : ''}${d.algo.tracking_error_bps} bps`} sub="vs VWAP benchmark" color={Math.abs(d.algo.tracking_error_bps) < 0.5 ? 'var(--green)' : 'var(--yellow)'} />
+            <MetricCard label="Avg Fill"       value={`$${d.algo.avg_fill_price}`} sub="child order avg" color='var(--t1)' />
+            <MetricCard label="Status"         value={d.algo.status.toUpperCase()} sub={`${d.algo.duration_min}min window`} color={d.algo.status==='active'?'var(--green)':'var(--t2)'} />
+          </div>
+          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:12, padding:16, border:'1px solid var(--border)' }}>
+            <div style={{ fontSize:11, color:'var(--t2)', marginBottom:8 }}>
+              VWAP Trajectory — Target vs Actual Fill &nbsp;·&nbsp;
+              <span style={{ color:'var(--blue)' }}>■ Target</span>&nbsp;
+              <span style={{ color:'var(--green)' }}>■ Actual</span>&nbsp;
+              <span style={{ color:'rgba(255,159,10,0.7)' }}>■ Volume</span>
+            </div>
+            <div style={{ height:200 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={d.algo.vwapHist}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="t" tick={{ fill:'var(--t3)', fontSize:9 }} interval={7} />
+                  <YAxis tick={{ fill:'var(--t3)', fontSize:9 }} unit="%" width={32} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.85)', border:'1px solid var(--border)', borderRadius:8, fontSize:10 }} />
+                  <Area type="monotone" dataKey="volume" stroke="rgba(255,159,10,0.5)" fill="rgba(255,159,10,0.07)" strokeWidth={1} name="Volume Profile" />
+                  <Area type="monotone" dataKey="target" stroke="var(--blue)" fill="rgba(10,132,255,0.1)" strokeWidth={2} name="Target %" />
+                  <Area type="monotone" dataKey="actual" stroke="var(--green)" fill="rgba(50,215,75,0.1)" strokeWidth={2} name="Actual %" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div style={{ fontSize:10, color:'var(--t3)', marginTop:8 }}>
+              100-share child orders drip-fed over {d.algo.duration_min}min · Target: &lt;0.5 bps tracking error
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subTab === 'ptp' && (
+        <div>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:16 }}>
+            <MetricCard label="Grandmaster"    value={d.ptp.grandmaster_quality.replace('_',' ').toUpperCase()} sub="GPS disciplined" color='#FFD60A' />
+            <MetricCard label="GPS Accuracy"   value={`±${d.ptp.gps_accuracy_ns} ns`} sub="OCXO oscillator" color='var(--green)' />
+            <MetricCard label="Max Inter-Node" value={`${d.ptp.max_inter_node_ns} ns`} sub="between any 2 nodes" color={d.ptp.max_inter_node_ns < 100 ? 'var(--green)' : 'var(--yellow)'} />
+            <MetricCard label="Sync Cycles"    value={d.ptp.sync_cycles.toLocaleString()} sub="8 Hz · 125ms interval" color='var(--blue)' />
+            <MetricCard label="GM Failovers"   value={d.ptp.failover_count} sub="today" color={d.ptp.failover_count===0?'var(--green)':'#FF453A'} />
+            <MetricCard label="MiFID II"       value="COMPLIANT" sub="<1µs timestamp req." color='var(--green)' />
+          </div>
+          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:12, padding:16, border:'1px solid var(--border)', marginBottom:12 }}>
+            <div style={{ fontSize:11, color:'var(--t2)', marginBottom:8 }}>Node Offset from UTC — nanoseconds (rolling 30 sync cycles)</div>
+            <div style={{ height:160 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={d.ptp.hist}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <XAxis dataKey="t" tick={{ fill:'var(--t3)', fontSize:9 }} />
+                  <YAxis tick={{ fill:'var(--t3)', fontSize:9 }} unit="ns" width={40} />
+                  <Tooltip contentStyle={{ background:'rgba(0,0,0,0.85)', border:'1px solid var(--border)', borderRadius:8, fontSize:10 }} />
+                  <ReferenceLine y={100} stroke="rgba(255,159,10,0.5)" strokeDasharray="4 4" />
+                  <ReferenceLine y={-100} stroke="rgba(255,159,10,0.5)" strokeDasharray="4 4" />
+                  {['n0','n1','n2','n3','n4'].map((k,i) => {
+                    const cols=['#64D2FF','#32D74B','#BF5AF2','#FFD60A','#FF9F0A']
+                    return <Line key={k} type="monotone" dataKey={k} stroke={cols[i]} strokeWidth={1.5} dot={false} name={`Node ${i+2}`} />
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+            {d.ptp.nodes.map(n => (
+              <div key={n.node_id} style={{ flex:1, minWidth:90, padding:'10px 12px', background:'rgba(255,255,255,0.04)', borderRadius:8, border:'1px solid var(--border)', textAlign:'center' }}>
+                <div style={{ fontSize:9, color:'var(--t3)', marginBottom:4 }}>Node {n.node_id}</div>
+                <div style={{ fontSize:14, fontWeight:800, color: Math.abs(n.offset_ns) < 100 ? 'var(--green)' : 'var(--yellow)' }}>
+                  {n.offset_ns > 0 ? '+' : ''}{n.offset_ns} ns
+                </div>
+                <div style={{ fontSize:9, color:'var(--t2)', marginTop:3 }}>{n.quality.replace('_',' ')}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {subTab === 'darkpool' && (
+        <div>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:16 }}>
+            <MetricCard label="Internalization Rate" value={`${(d.darkPool.internalization_rate*100).toFixed(1)}%`} sub="of retail flow" color={d.darkPool.internalization_rate>0.7?'var(--green)':'var(--yellow)'} />
+            <MetricCard label="Internalized"         value={d.darkPool.internalized.toLocaleString()} sub={`of ${d.darkPool.total_orders.toLocaleString()} total`} color='var(--blue)' />
+            <MetricCard label="Volume Crossed"       value={`${(d.darkPool.volume_internalized/1e6).toFixed(1)}M`} sub="shares at midpoint" color='var(--t1)' />
+            <MetricCard label="Exchange Fees Saved"  value={`$${Number(d.darkPool.fees_saved_usd).toLocaleString()}`} sub="$0.003/share" color='var(--green)' />
+            <MetricCard label="PFoF Paid"            value={`$${Number(d.darkPool.pfof_paid_usd).toLocaleString()}`} sub="$0.001/share" color='var(--yellow)' />
+            <MetricCard label="Net Benefit"          value={`$${Number(d.darkPool.net_benefit_usd).toLocaleString()}`} sub="fees – PFoF" color='var(--green)' />
+          </div>
+          <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:12, padding:20, border:'1px solid var(--border)' }}>
+            <div style={{ fontSize:12, color:'var(--t2)', marginBottom:16 }}>Internalized vs Lit Market Execution</div>
+            <div style={{ display:'flex', alignItems:'center', gap:24, flexWrap:'wrap' }}>
+              <div style={{ position:'relative', width:140, height:140, flexShrink:0 }}>
+                <svg width="140" height="140" style={{ transform:'rotate(-90deg)' }}>
+                  <circle cx="70" cy="70" r="52" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="18" />
+                  <circle cx="70" cy="70" r="52" fill="none" stroke="var(--green)" strokeWidth="18"
+                    strokeDasharray={`${d.darkPool.internalization_rate * 326.7} 326.7`} strokeLinecap="round" />
+                  <circle cx="70" cy="70" r="52" fill="none" stroke="rgba(255,69,58,0.45)" strokeWidth="18"
+                    strokeDasharray={`${(1-d.darkPool.internalization_rate) * 326.7} 326.7`}
+                    strokeDashoffset={`${-d.darkPool.internalization_rate * 326.7}`} strokeLinecap="round" />
+                </svg>
+                <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+                  <div style={{ fontSize:22, fontWeight:800, color:'var(--green)' }}>{(d.darkPool.internalization_rate*100).toFixed(1)}%</div>
+                  <div style={{ fontSize:9, color:'var(--t3)' }}>Internal</div>
+                </div>
+              </div>
+              <div style={{ flex:1, minWidth:160 }}>
+                {[
+                  { label:'Internalized — midpoint cross', val:`${d.darkPool.internalized.toLocaleString()} orders`, color:'var(--green)' },
+                  { label:'Lit Market — exchange route',   val:`${d.darkPool.lit_routed.toLocaleString()} orders`,   color:'rgba(255,69,58,0.8)' },
+                ].map((r,i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+                    <div style={{ width:10, height:10, borderRadius:'50%', background:r.color, flexShrink:0 }} />
+                    <div>
+                      <div style={{ fontSize:11, color:'var(--t1)' }}>{r.label}</div>
+                      <div style={{ fontSize:13, fontWeight:700, color:r.color }}>{r.val}</div>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ fontSize:10, color:'var(--t3)', lineHeight:1.7 }}>
+                  Crosses at NBBO midpoint · Saves half the spread for retail ·
+                  PFoF payment to brokers · Zero lit-market footprint until T+1
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {subTab === 'var' && (
+        <div>
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:16 }}>
+            <MetricCard label="99% 1-Day VaR" value={`$${(d.var.var_usd/1e6).toFixed(2)}M`} sub="Monte Carlo 10k scenarios" color='#FF453A' />
+            <MetricCard label="CVaR / ES"      value={`$${(d.var.cvar_usd/1e6).toFixed(2)}M`} sub="expected shortfall" color='rgba(255,69,58,0.8)' />
+            <MetricCard label="VaR %"          value={`${d.var.var_pct}%`} sub="of portfolio value" color='var(--yellow)' />
+            <MetricCard label="Portfolio"      value={`$${(d.var.portfolio_value_usd/1e6).toFixed(1)}M`} sub="multi-asset" color='var(--t1)' />
+            <MetricCard label="Worst Scenario" value={`$${(d.var.worst_scenario_usd/1e6).toFixed(2)}M`} sub="tail loss" color='rgba(255,69,58,0.5)' />
+            <MetricCard label="Confidence"     value={`${d.var.confidence_level*100}%`} sub="Basel III standard" color='var(--green)' />
+          </div>
+          <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+            <div style={{ flex:2, minWidth:280, background:'rgba(255,255,255,0.03)', borderRadius:12, padding:16, border:'1px solid var(--border)' }}>
+              <div style={{ fontSize:11, color:'var(--t2)', marginBottom:8 }}>
+                P&L Distribution — Monte Carlo ($k) · <span style={{ color:'#FF453A' }}>▌ 99% VaR</span>
+              </div>
+              <div style={{ height:180 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={d.var.dist} barSize={8}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="pnl" tick={{ fill:'var(--t3)', fontSize:8 }} unit="k" tickCount={7} />
+                    <YAxis tick={{ fill:'var(--t3)', fontSize:8 }} width={30} />
+                    <Tooltip contentStyle={{ background:'rgba(0,0,0,0.85)', border:'1px solid var(--border)', borderRadius:8, fontSize:10 }}
+                      formatter={(v) => [v, 'Probability']} />
+                    <ReferenceLine x={-Math.round(d.var.var_usd/1000)} stroke="#FF453A" strokeWidth={2}
+                      label={{ value:'99% VaR', fill:'#FF453A', fontSize:9, position:'top' }} />
+                    <Bar dataKey="prob" fill="rgba(10,132,255,0.6)" radius={[2,2,0,0]} name="Probability" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div style={{ flex:1, minWidth:200, background:'rgba(255,255,255,0.03)', borderRadius:12, padding:16, border:'1px solid var(--border)' }}>
+              <div style={{ fontSize:11, color:'var(--t2)', marginBottom:10 }}>Stress Scenarios</div>
+              {d.var.stress.map((s,i) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8,
+                  padding:'6px 8px', background:'rgba(255,255,255,0.03)', borderRadius:6 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:'var(--t1)', fontWeight:600 }}>{s.name}</div>
+                    <div style={{ fontSize:9, color:'var(--t3)' }}>{s.pnl_pct}% shock</div>
+                  </div>
+                  <div style={{ fontSize:12, fontWeight:700,
+                    color: s.total_pnl_usd < -10e6 ? '#FF453A' : s.total_pnl_usd < -4e6 ? 'var(--yellow)' : 'var(--t2)' }}>
+                    ${(s.total_pnl_usd/1e6).toFixed(1)}M
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -445,3 +445,114 @@ export function makeHFTSilicon(tick) {
     },
   };
 }
+
+export function makeEnterpriseDesk(tick) {
+  // VWAP algo execution
+  const totalQty = 1_000_000;
+  const elapsed = (tick % 360) / 360;
+  const filledQty = Math.round(totalQty * elapsed * (0.95 + Math.sin(tick * 0.03) * 0.05));
+  const vwapBenchmark = 182.50;
+  const avgFill = +(vwapBenchmark + (Math.random() - 0.5) * 0.08).toFixed(4);
+  const trackingBps = +((avgFill - vwapBenchmark) / vwapBenchmark * 10000).toFixed(3);
+  const vwapHist = Array.from({ length: 40 }, (_, i) => {
+    const t = i / 39;
+    const cumVol = t * (1 + Math.sin(t * Math.PI) * 0.15);
+    return {
+      t: `${Math.round(t * 360)}m`,
+      target:  +(cumVol * 100).toFixed(1),
+      actual:  +(cumVol * 100 + Math.sin((tick + i) * 0.4) * 1.5).toFixed(1),
+      volume:  +((0.025 + 0.015 * Math.pow(t - 0.5, 2) * 4) * 100).toFixed(1),
+    };
+  });
+
+  // PTP clock sync — 5 nodes
+  const ptpNodes = Array.from({ length: 5 }, (_, i) => ({
+    node_id: i + 2,
+    offset_ns: +(Math.sin((tick + i * 37) * 0.17) * 18 + Math.random() * 4).toFixed(2),
+    quality: 'ptp_synced',
+    sync_count: 2400 + tick * 8 + i * 120,
+  }));
+  const ptpHist = Array.from({ length: 30 }, (_, i) => ({
+    t: i,
+    n0: +(Math.sin((tick + i) * 0.23) * 12 + Math.random() * 3).toFixed(1),
+    n1: +(Math.sin((tick + i) * 0.19 + 1) * 10 + Math.random() * 3).toFixed(1),
+    n2: +(Math.sin((tick + i) * 0.31 + 2) * 14 + Math.random() * 3).toFixed(1),
+    n3: +(Math.sin((tick + i) * 0.27 + 3) * 9  + Math.random() * 3).toFixed(1),
+    n4: +(Math.sin((tick + i) * 0.21 + 4) * 11 + Math.random() * 3).toFixed(1),
+  }));
+
+  // Dark pool ATS
+  const totalOrders = 48_200 + tick * 12;
+  const internalized = Math.round(totalOrders * 0.724);
+  const litRouted = totalOrders - internalized;
+  const pfofPaid = +(internalized * 100 * 0.001).toFixed(2);
+  const feesSaved = +(internalized * 100 * 0.003).toFixed(2);
+
+  // VaR — Monte Carlo bell curve
+  const varUsd = 2_840_000 + Math.round(Math.sin(tick * 0.05) * 120_000);
+  const portVal = 47_200_000;
+  const varPct = +(varUsd / portVal * 100).toFixed(2);
+  const sigma = 0.015;
+  const varDist = Array.from({ length: 50 }, (_, i) => {
+    const x = (i / 49 - 0.5) * 0.08;
+    const y = Math.exp(-0.5 * (x / sigma) ** 2) / (sigma * Math.sqrt(2 * Math.PI));
+    return {
+      pnl: Math.round(x * portVal / 1000),
+      prob: +(y * 0.08 / 50).toFixed(5),
+      isVar: i === 1,
+    };
+  });
+
+  const stressTests = [
+    { name:'2008 GFC',          pnl_pct:-34.2, total_pnl_usd:-16_142_000 },
+    { name:'2020 COVID',        pnl_pct:-29.8, total_pnl_usd:-14_075_600 },
+    { name:'1987 Black Monday', pnl_pct:-21.5, total_pnl_usd:-10_148_000 },
+    { name:'Flash Crash 2010',  pnl_pct: -8.7, total_pnl_usd: -4_106_400 },
+    { name:'Volmageddon 2018',  pnl_pct: -3.1, total_pnl_usd: -1_463_200 },
+  ];
+
+  return {
+    algo: {
+      symbol: 'AAPL', side: 'buy', algo_type: 'vwap',
+      total_qty: totalQty, filled_qty: filledQty,
+      fill_rate: +(filledQty / totalQty).toFixed(4),
+      slices_sent: Math.round(filledQty / 100),
+      avg_fill_price: avgFill,
+      tracking_error_bps: trackingBps,
+      duration_min: 360,
+      child_size: 100,
+      status: elapsed >= 1 ? 'completed' : 'active',
+      vwapHist,
+    },
+    ptp: {
+      sync_cycles: 28_800 + tick * 8,
+      grandmaster_quality: 'gps_locked',
+      gps_accuracy_ns: 20,
+      max_inter_node_ns: +(Math.abs(Math.sin(tick * 0.13)) * 22 + 3).toFixed(2),
+      failover_count: 0,
+      nodes: ptpNodes,
+      hist: ptpHist,
+    },
+    darkPool: {
+      total_orders: totalOrders,
+      internalized,
+      lit_routed: litRouted,
+      internalization_rate: +(internalized / totalOrders).toFixed(4),
+      pfof_paid_usd: pfofPaid,
+      fees_saved_usd: feesSaved,
+      net_benefit_usd: +(feesSaved - pfofPaid).toFixed(2),
+      volume_internalized: internalized * 100,
+    },
+    var: {
+      confidence_level: 0.99,
+      horizon_days: 1,
+      portfolio_value_usd: portVal,
+      var_usd: varUsd,
+      cvar_usd: Math.round(varUsd * 1.38),
+      var_pct: varPct,
+      worst_scenario_usd: Math.round(varUsd * 2.1),
+      dist: varDist,
+      stress: stressTests,
+    },
+  };
+}

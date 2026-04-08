@@ -37,7 +37,7 @@ from core.models import (
     UniverseSnapshot,
 )
 from agents.base import BaseAgent
-from data.feed import AlpacaDataFeed
+from data.base import DataFeedBase
 from data.level2 import OrderBookCache
 from infrastructure.message_bus import MessageBus
 from infrastructure.state_store import StateStore
@@ -71,15 +71,17 @@ class MicroSignalAgent(BaseAgent):
         bus: MessageBus,
         store: StateStore,
         audit: AuditLog,
-        data_feed: AlpacaDataFeed,
+        data_feed: DataFeedBase,
         order_book: OrderBookCache,
         open_positions_fn: Callable[[], list[str]],
+        agent_id: str | None = None,
+        agent_name: str | None = None,
         config: dict | None = None,
         fpga_pipeline: "Any | None" = None,
     ) -> None:
         super().__init__(
-            agent_id=AGENT_IDS[4],
-            agent_name="MicroSignalAgent",
+            agent_id=agent_id or AGENT_IDS[4],
+            agent_name=agent_name or "MicroSignalAgent",
             bus=bus,
             store=store,
             audit=audit,

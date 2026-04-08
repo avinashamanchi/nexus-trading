@@ -27,11 +27,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-TickHandler = Callable[[MarketTick], Awaitable[None]]
-BarHandler = Callable[[BarData], Awaitable[None]]
+from data.base import DataFeedBase, TickHandler, BarHandler
 
 
-class AlpacaDataFeed:
+class AlpacaDataFeed(DataFeedBase):
     """
     Alpaca WebSocket market data feed.
 

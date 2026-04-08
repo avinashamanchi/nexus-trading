@@ -43,7 +43,7 @@ from core.models import (
     ValidatedSignal,
 )
 from agents.base import BaseAgent
-from data.feed import AlpacaDataFeed
+from data.base import DataFeedBase
 from infrastructure.message_bus import MessageBus
 from infrastructure.state_store import StateStore
 from infrastructure.audit_log import AuditLog
@@ -85,7 +85,7 @@ class SignalValidationAgent(BaseAgent):
         bus: MessageBus,
         store: StateStore,
         audit: AuditLog,
-        data_feed: AlpacaDataFeed,
+        data_feed: DataFeedBase,
         current_regime_fn: Callable[[], RegimeAssessment | None],
         current_universe_fn: Callable[[], UniverseSnapshot | None],
         config: dict | None = None,

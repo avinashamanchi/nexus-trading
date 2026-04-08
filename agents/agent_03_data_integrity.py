@@ -37,7 +37,7 @@ from core.models import (
     FeedStatusReport,
 )
 from agents.base import BaseAgent
-from data.feed import AlpacaDataFeed
+from data.base import DataFeedBase
 from data.level2 import OrderBookCache
 from infrastructure.message_bus import MessageBus
 from infrastructure.state_store import StateStore
@@ -72,7 +72,7 @@ class DataIntegrityAgent(BaseAgent):
         bus: MessageBus,
         store: StateStore,
         audit: AuditLog,
-        data_feed: AlpacaDataFeed,
+        data_feed: DataFeedBase,
         order_book: OrderBookCache,
         config: dict | None = None,
     ) -> None:

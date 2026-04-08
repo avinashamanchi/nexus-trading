@@ -29,6 +29,10 @@ export const AGENTS = [
   { id:21, name:"Stat Arb",          abbr:"SAA",  color:"#0A84FF", desc:"Cointegration pair trading",      tier:"institutional" },
   { id:22, name:"Alt Data",          abbr:"ADA",  color:"#FF9F0A", desc:"Satellite · NLP · sentiment",     tier:"institutional" },
   { id:23, name:"CAT Compliance",    abbr:"CAT",  color:"#FF453A", desc:"SEC CAT + spoofing detection",    tier:"institutional" },
+  // ── Enterprise (Agents 24–26) ─────────────────────────────────────────────
+  { id:24, name:"Algo Execution",    abbr:"AEA",  color:"#64D2FF", desc:"VWAP/TWAP/POV/IS block desk",     tier:"enterprise" },
+  { id:25, name:"Dark Pool ATS",     abbr:"ATS",  color:"#32D74B", desc:"PFoF internalization engine",     tier:"enterprise" },
+  { id:26, name:"Enterprise Risk",   abbr:"VaR",  color:"#FF453A", desc:"Monte Carlo VaR · stress tests",  tier:"enterprise" },
 ];
 
 export function makeLivePnl() {

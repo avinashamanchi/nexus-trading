@@ -32,3 +32,62 @@ def test_data_feed_base_required_methods():
         "run", "stop", "is_running", "subscribed_symbols",
     }
     assert expected.issubset(abstract)
+
+
+def test_alpaca_feed_is_data_feed_base():
+    from data.feed import AlpacaDataFeed
+    from data.base import DataFeedBase
+    feed = AlpacaDataFeed(api_key="k", secret_key="s")
+    assert isinstance(feed, DataFeedBase)
+
+
+def test_polygon_feed_is_data_feed_base():
+    from data.polygon_feed import PolygonDataFeed
+    from data.base import DataFeedBase
+    feed = PolygonDataFeed(api_key="k", use_delayed=True)
+    assert isinstance(feed, DataFeedBase)
+
+
+def test_both_feeds_expose_identical_method_signatures():
+    """Both feeds must have the same set of public DataFeedBase methods."""
+    import inspect
+    from data.feed import AlpacaDataFeed
+    from data.polygon_feed import PolygonDataFeed
+    from data.base import DataFeedBase
+
+    base_methods = {
+        name for name, val in inspect.getmembers(DataFeedBase)
+        if not name.startswith("_") and callable(val)
+    }
+
+    alpaca_methods = {
+        name for name, val in inspect.getmembers(AlpacaDataFeed)
+        if not name.startswith("_") and callable(val)
+    }
+    polygon_methods = {
+        name for name, val in inspect.getmembers(PolygonDataFeed)
+        if not name.startswith("_") and callable(val)
+    }
+
+    missing_alpaca = base_methods - alpaca_methods
+    missing_polygon = base_methods - polygon_methods
+
+    assert not missing_alpaca, f"AlpacaDataFeed missing: {missing_alpaca}"
+    assert not missing_polygon, f"PolygonDataFeed missing: {missing_polygon}"
+
+
+@pytest.mark.asyncio
+async def test_polygon_feed_get_recent_bars_delegates_to_get_bar_history():
+    from data.polygon_feed import PolygonDataFeed
+    feed = PolygonDataFeed(api_key="k", use_delayed=True)
+    # No bars yet — both should return empty list
+    assert feed.get_recent_bars("AAPL", timeframe="1m", limit=5) == []
+    assert feed.get_bar_history("AAPL", n=5) == []
+
+
+@pytest.mark.asyncio
+async def test_alpaca_feed_get_recent_bars_delegates_to_get_bar_history():
+    from data.feed import AlpacaDataFeed
+    feed = AlpacaDataFeed(api_key="k", secret_key="s")
+    assert feed.get_recent_bars("AAPL", timeframe="1m", limit=5) == []
+    assert feed.get_bar_history("AAPL", n=5) == []

@@ -40,6 +40,8 @@ python-dateutil>=2.9.0
 pytz>=2024.1
 tenacity>=8.3.0
 
+# Polygon/Massive market data — uses websockets and aiohttp (above), no additional SDK needed
+
 # HFT Infrastructure (Layers 1-9)
 sortedcontainers>=2.4.0   # Layer 4: SortedDict for MBO order book
 httpx>=0.27.0             # Layer 5: async ClickHouse HTTP client

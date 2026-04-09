@@ -5,10 +5,23 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 
 system:
-  mode: shadow                    # shadow | live
+  mode: paper                     # shadow | paper | live
   log_level: INFO
   heartbeat_interval_ms: 500
   session_timezone: America/New_York
+
+data_feed:
+  provider: polygon               # polygon | alpaca
+  use_delayed: true               # true = delayed feed (off-hours testing); false = real-time
+
+polygon:
+  api_key_env: POLYGON_API_KEY    # env var name — never hardcoded
+  ws_url_realtime: wss://socket.polygon.io/stocks
+  ws_url_delayed: wss://delayed.polygon.io/stocks
+  l2_snapshot_poll_sec: 2
+  l2_mode: nbbo_only              # nbbo_only | launchpad (post-MVP)
+  reconnect_delay_sec: 5
+  max_reconnect_attempts: 10
 
 # ─── Capital & Account Structure (§7.6) ────────────────────────────────────────
 capital:

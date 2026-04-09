@@ -103,11 +103,13 @@ class EdgeResearchAgent(BaseAgent):
         bus: MessageBus,
         store: StateStore,
         audit: AuditLog,
+        agent_id: str | None = None,
+        agent_name: str | None = None,
         config: dict | None = None,
     ) -> None:
         super().__init__(
-            agent_id=self.AGENT_ID,
-            agent_name=self.AGENT_NAME,
+            agent_id=agent_id or self.AGENT_ID,
+            agent_name=agent_name or self.AGENT_NAME,
             bus=bus,
             store=store,
             audit=audit,

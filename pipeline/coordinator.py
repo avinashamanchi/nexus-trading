@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 
 from brokers.alpaca import AlpacaBroker
 from core.enums import SystemState, Topic
+from data.base import DataFeedBase
 from data.feed import AlpacaDataFeed
 from data.level2 import MockOrderBookFeed, OrderBookCache
 from infrastructure.audit_log import AuditLog
@@ -62,7 +63,9 @@ class TradingSystemCoordinator:
         self.store: StateStore | None = None
         self.audit: AuditLog | None = None
         self.broker: AlpacaBroker | None = None
-        self.data_feed: AlpacaDataFeed | None = None
+        self.data_feed: DataFeedBase | None = None
+        self._l2_manager = None
+        self._deferred_agents: list = []
         self.order_book: OrderBookCache | None = None
         self.state_machine: TradingSessionStateMachine | None = None
         self.watchdog: BusWatchdog | None = None
@@ -74,6 +77,45 @@ class TradingSystemCoordinator:
 
         # In-memory open position symbol tracker (sync-accessible by MiSA)
         self._open_position_symbols: set[str] = set()
+
+    def _build_data_feed(self) -> DataFeedBase:
+        """
+        Instantiate the configured data feed provider.
+        Controlled by config.yaml: data_feed.provider (polygon | alpaca).
+        """
+        provider = self.config.get("data_feed", {}).get("provider", "alpaca")
+        if provider == "polygon":
+            from data.polygon_feed import PolygonDataFeed
+            from data.polygon_l2 import PolygonL2Manager
+
+            api_key_env = self.config.get("polygon", {}).get("api_key_env", "POLYGON_API_KEY")
+            api_key = os.environ[api_key_env]
+            use_delayed = self.config.get("data_feed", {}).get("use_delayed", False)
+            reconnect_delay = self.config.get("polygon", {}).get("reconnect_delay_sec", 5.0)
+            max_reconnects = self.config.get("polygon", {}).get("max_reconnect_attempts", 10)
+
+            feed = PolygonDataFeed(
+                api_key=api_key,
+                use_delayed=use_delayed,
+                reconnect_delay_sec=reconnect_delay,
+                max_reconnect_attempts=max_reconnects,
+            )
+
+            poll_sec = self.config.get("polygon", {}).get("l2_snapshot_poll_sec", 2)
+            l2_manager = PolygonL2Manager(
+                api_key=api_key,
+                order_book=self.order_book,
+                poll_sec=poll_sec,
+            )
+            self._l2_manager = l2_manager
+            return feed
+        else:
+            paper = self._mode != "live"
+            return AlpacaDataFeed(
+                api_key=os.environ.get("ALPACA_API_KEY", ""),
+                secret_key=os.environ.get("ALPACA_SECRET_KEY", ""),
+                paper=paper,
+            )
 
     async def initialize(self) -> None:
         """Initialize all infrastructure and agents."""
@@ -104,18 +146,22 @@ class TradingSystemCoordinator:
         await self.broker.connect()
 
         # ── Data Feed ─────────────────────────────────────────────────────────
-        self.data_feed = AlpacaDataFeed(
-            api_key=os.environ.get("ALPACA_API_KEY", ""),
-            secret_key=os.environ.get("ALPACA_SECRET_KEY", ""),
-            paper=paper,
-        )
         self.order_book = OrderBookCache()
+        self.data_feed = self._build_data_feed()
 
-        # Sync L1→L2 for paper mode
-        mock_l2 = MockOrderBookFeed(self.order_book)
-        self.data_feed.add_tick_handler(
-            lambda tick: mock_l2.update_from_tick(tick.symbol, tick.bid, tick.ask)
-        )
+        provider = self.config.get("data_feed", {}).get("provider", "alpaca")
+        if provider == "polygon" and self._l2_manager:
+            # Wire Q.* NBBO events from PolygonDataFeed → PolygonL2Manager
+            l2 = self._l2_manager
+            async def _nbbo_handler(tick) -> None:
+                await l2.update_from_nbbo(tick.symbol, tick.bid, 0, tick.ask, 0, tick.timestamp)
+            self.data_feed.add_tick_handler(_nbbo_handler)
+        else:
+            # Alpaca paper: synthetic L2 from L1 ticks (unchanged)
+            mock_l2 = MockOrderBookFeed(self.order_book)
+            self.data_feed.add_tick_handler(
+                lambda tick: mock_l2.update_from_tick(tick.symbol, tick.bid, tick.ask)
+            )
 
         # ── State Machine ─────────────────────────────────────────────────────
         self.state_machine = TradingSessionStateMachine()
@@ -138,14 +184,15 @@ class TradingSystemCoordinator:
         base_kwargs = dict(bus=self.bus, store=self.store, audit=self.audit, config=self.config)
 
         # Deferred imports to avoid circular deps at module level
+        from agents.agent_17_global_clock import GlobalClockAgent
         from agents.agent_00_edge_research import EdgeResearchAgent
         from agents.agent_01_market_universe import MarketUniverseAgent
         from agents.agent_02_market_regime import MarketRegimeAgent
         from agents.agent_03_data_integrity import DataIntegrityAgent
         from agents.agent_04_micro_signal import MicroSignalAgent
         from agents.agent_05_signal_validation import SignalValidationAgent
-        from agents.agent_06_tera import TradeEligibilityRiskAgent
-        from agents.agent_07_spa import SizingPlanAgent
+        from agents.agent_06_tera import TERAAgent
+        from agents.agent_07_spa import SPAAgent
         from agents.agent_08_execution import ExecutionAgent
         from agents.agent_09_broker_reconciliation import BrokerReconciliationAgent
         from agents.agent_10_execution_quality import ExecutionQualityAgent
@@ -161,25 +208,22 @@ class TradingSystemCoordinator:
             acct = await self.broker.get_account()
             return acct.equity
 
+        # Agent 17 — Global Clock (instantiated first, started first)
+        gca = GlobalClockAgent(bus=self.bus, store=self.store, audit=self.audit)
+
         # Agent 0 — Edge Research
         era = EdgeResearchAgent(
             agent_id="edge_research", agent_name="EdgeResearchAgent", **base_kwargs
         )
 
         # Agent 1 — Market Universe
-        mua = MarketUniverseAgent(
-            agent_id="market_universe", agent_name="MarketUniverseAgent",
-            broker=self.broker, **base_kwargs,
-        )
+        mua = MarketUniverseAgent(**base_kwargs)
 
         # Agent 2 — Market Regime
-        mra = MarketRegimeAgent(
-            agent_id="market_regime", agent_name="MarketRegimeAgent", **base_kwargs
-        )
+        mra = MarketRegimeAgent(**base_kwargs)
 
         # Agent 3 — Data Integrity
         dia = DataIntegrityAgent(
-            agent_id="data_integrity", agent_name="DataIntegrityAgent",
             data_feed=self.data_feed, order_book=self.order_book, **base_kwargs,
         )
 
@@ -202,8 +246,8 @@ class TradingSystemCoordinator:
         )
 
         # Agent 6 — TERA
-        tera = TradeEligibilityRiskAgent(
-            agent_id="tera", agent_name="TradeEligibilityRiskAgent",
+        tera = TERAAgent(
+            agent_id="tera", agent_name="TERAAgent",
             account_equity_fn=get_account_equity,
             get_wash_sale_fn=self.store.get_wash_sale_flag,
             open_positions_fn=self.store.load_open_positions,
@@ -211,8 +255,8 @@ class TradingSystemCoordinator:
         )
 
         # Agent 7 — SPA
-        spa = SizingPlanAgent(
-            agent_id="spa", agent_name="SizingPlanAgent",
+        spa = SPAAgent(
+            agent_id="spa", agent_name="SPAAgent",
             account_equity_fn=get_account_equity,
             approved_setups_fn=lambda: era.approved_setup_list,
             current_execution_quality_fn=lambda: eq_agent.session_summary,
@@ -273,10 +317,15 @@ class TradingSystemCoordinator:
             **base_kwargs,
         )
 
-        self._agents = [
-            era, mua, mra, dia, misa, sva, tera, spa, ea,
-            bra, eq_agent, mma, ela, psa, psra, tca, hgl,
-        ]
+        # MVP active agents (17→1→2→3→4→5→8→9→11→12→13)
+        self._agents = [gca, mua, mra, dia, misa, sva, ea, bra, mma, ela, psa]
+
+        # Deferred agents — instantiated but not started in MVP
+        # Reactivating any: move from this list to self._agents
+        self._deferred_agents = [era, tera, spa, eq_agent, psra, tca, hgl]
+
+        deferred_names = [type(a).__name__ for a in self._deferred_agents]
+        logger.info("Deferred agents (not started): %s", deferred_names)
 
         # Keep named references for direct access
         self.psa = psa
@@ -318,11 +367,21 @@ class TradingSystemCoordinator:
             self.watchdog.run(), name="bus-watchdog"
         )
 
+        # Start L2 manager background poll (Polygon only — None for Alpaca)
+        if self._l2_manager:
+            l2_task = asyncio.create_task(
+                self._l2_manager.run(lambda: list(self.data_feed.subscribed_symbols)),
+                name="l2-manager",
+            )
+            tasks_to_cancel = agent_tasks + [sm_task, feed_task, watchdog_task, l2_task]
+        else:
+            tasks_to_cancel = agent_tasks + [sm_task, feed_task, watchdog_task]
+
         logger.info("All agents started — system is LIVE")
 
         # Wait for shutdown signal
         await self._shutdown_event.wait()
-        await self._graceful_shutdown(agent_tasks + [sm_task, feed_task, watchdog_task])
+        await self._graceful_shutdown(tasks_to_cancel)
 
     async def _graceful_shutdown(self, tasks: list) -> None:
         logger.info("Graceful shutdown initiated...")
@@ -333,6 +392,10 @@ class TradingSystemCoordinator:
 
         # Stop data feed
         await self.data_feed.stop()
+
+        # Stop L2 manager (Polygon only)
+        if self._l2_manager:
+            await self._l2_manager.stop()
 
         # Cancel remaining tasks
         for task in tasks:

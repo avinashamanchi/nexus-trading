@@ -15,7 +15,7 @@ import asyncio
 import logging
 from collections import defaultdict, deque
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, Awaitable
+from typing import TYPE_CHECKING
 
 from alpaca.data.live import StockDataStream
 from alpaca.data.models import Bar, Quote, Trade
